@@ -1,0 +1,8 @@
+{
+  "name": "FinTrack AI",
+  "description": "An intelligent personal finance dashboard that helps you track your assets and spending. Use the AI agent to add transactions with natural language and get insights into your financial health.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "prompt": ""
+}
