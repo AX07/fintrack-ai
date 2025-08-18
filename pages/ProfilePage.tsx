@@ -12,6 +12,10 @@ import { exportTransactionsToCSV, exportAccountsToCSV } from '../utils/export';
 import { DownloadIcon, TrashIcon, LogOutIcon, SyncIcon, SparklesIcon } from '../components/Icons';
 import { FinanceData } from '../types';
 
+// The data payload for syncing, which includes financial data and the API key
+interface SyncPayload extends FinanceData {
+    apiKey: string | null;
+}
 
 // Helper to deeply merge two FinanceData objects
 const mergeFinanceData = (hostData: FinanceData, clientData: FinanceData): FinanceData => {
@@ -71,12 +75,13 @@ const ProfilePage: React.FC = () => {
     const qrCanvasRef = useRef<HTMLCanvasElement>(null);
     const scannerRef = useRef<Html5Qrcode | null>(null);
 
-    // This object contains only the data properties, suitable for serialization and sync.
-    const currentData: FinanceData = {
+    // This object contains all data, including the API key, for sync.
+    const currentSyncPayload: SyncPayload = {
         transactions,
         accounts,
         conversationHistory,
         lastUpdated,
+        apiKey,
     };
 
     const addLog = (message: string) => setLog(prev => [message, ...prev.slice(0, 99)]);
@@ -143,7 +148,7 @@ const ProfilePage: React.FC = () => {
         };
     }, [mode]);
 
-    // FIX: Effect to generate QR code once peerId is available
+    // Effect to generate QR code once peerId is available
     useEffect(() => {
         if (mode === 'host' && peerId && qrCanvasRef.current) {
             QRCode.toCanvas(qrCanvasRef.current, peerId, { width: 256, errorCorrectionLevel: 'H' })
@@ -178,23 +183,63 @@ const ProfilePage: React.FC = () => {
     const setupConnectionListeners = (conn: DataConnection) => {
         conn.on('open', () => {
             setConnectionStatus('connected');
-            addLog('Connection established! Syncing data...');
-            conn.send(currentData);
+            addLog('Connection established.');
+            // The device that scanned the QR code ('client') sends its data first to initiate the sync.
+            if (mode === 'scan') {
+                addLog("Sending this device's data to the host...");
+                conn.send(currentSyncPayload);
+            }
         });
-
+    
         conn.on('data', (receivedData: any) => {
-            addLog("Received data from peer. Merging...");
-            const remoteData = receivedData as FinanceData;
-            const mergedData = mode === 'host'
-                ? mergeFinanceData(currentData, remoteData)
-                : mergeFinanceData(remoteData, currentData);
+            const remotePayload = receivedData as SyncPayload;
             
-            setData(mergedData);
-            addLog("Sync complete! Your data is now up-to-date.");
-            conn.send(mergedData); // Send final merged data back
-            setTimeout(() => conn.close(), 1000);
+            if (mode === 'host') {
+                // HOST: Receives client data, merges everything, and sends the final version back.
+                addLog("Received data from peer. Merging as the host...");
+                
+                const hostPayload = currentSyncPayload; // This device's data
+                const finalFinanceData = mergeFinanceData(hostPayload, remotePayload);
+                
+                // API Key Logic: Host's key takes priority.
+                const finalApiKey = hostPayload.apiKey || remotePayload.apiKey;
+    
+                // Update the host device's state with the merged result.
+                setData(finalFinanceData);
+                if (finalApiKey && !hostPayload.apiKey) {
+                    saveApiKey(finalApiKey); // Save if host didn't have one but client did
+                }
+    
+                const finalPayload: SyncPayload = {
+                    ...finalFinanceData,
+                    apiKey: finalApiKey,
+                };
+    
+                addLog("Merge complete. Sending final data back to peer.");
+                conn.send(finalPayload);
+                setTimeout(() => conn.close(), 1000); // Close connection after sending final data
+            } else {
+                // CLIENT: Receives the final merged data from the host and applies it.
+                addLog("Received final merged data from host. Applying updates...");
+                
+                const finalFinanceData: FinanceData = {
+                    transactions: remotePayload.transactions,
+                    accounts: remotePayload.accounts,
+                    conversationHistory: remotePayload.conversationHistory,
+                    lastUpdated: remotePayload.lastUpdated,
+                };
+                setData(finalFinanceData);
+                
+                if (remotePayload.apiKey) {
+                    saveApiKey(remotePayload.apiKey);
+                    addLog("API Key has been synced from the host device.");
+                }
+                
+                addLog("Sync complete! This device is now up-to-date.");
+                conn.close(); // Client closes connection upon receiving final data.
+            }
         });
-
+    
         conn.on('close', () => {
             setConnectionStatus('disconnected');
             addLog("Connection closed.");
