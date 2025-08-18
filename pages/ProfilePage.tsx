@@ -100,6 +100,14 @@ const ProfilePage: React.FC = () => {
             removeApiKey();
         }
     };
+    
+    // --- Handler for Deleting All Data ---
+    const handleDeleteAllDataAndKey = () => {
+        if (window.confirm("Are you sure you want to delete all your financial data AND your saved API key? This action cannot be undone.")) {
+            clearAllData();
+            removeApiKey();
+        }
+    };
 
     // --- Effects for Device Sync ---
 
@@ -395,7 +403,7 @@ const ProfilePage: React.FC = () => {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
                     <button 
-                    onClick={clearAllData}
+                    onClick={handleDeleteAllDataAndKey}
                     className="w-full sm:w-auto flex-grow flex justify-center items-center gap-2 bg-negative/10 hover:bg-negative/20 text-negative-text font-semibold py-2 px-4 rounded-lg transition-colors"
                     >
                         <TrashIcon className="w-4 h-4" />
