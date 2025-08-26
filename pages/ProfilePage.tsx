@@ -7,15 +7,10 @@ import { Html5Qrcode } from 'html5-qrcode';
 import Card from '../components/Card';
 import { useAuth } from '../hooks/useAuth';
 import { useFinance } from '../hooks/useFinance';
-import { useApiKey } from '../hooks/useApiKey';
 import { exportTransactionsToCSV, exportAccountsToCSV } from '../utils/export';
-import { DownloadIcon, TrashIcon, LogOutIcon, SyncIcon, SparklesIcon } from '../components/Icons';
+import { DownloadIcon, TrashIcon, LogOutIcon, SyncIcon } from '../components/Icons';
 import { FinanceData } from '../types';
 
-// The data payload for syncing, which includes financial data and the API key
-interface SyncPayload extends FinanceData {
-    apiKey: string | null;
-}
 
 // Helper to deeply merge two FinanceData objects
 const mergeFinanceData = (hostData: FinanceData, clientData: FinanceData): FinanceData => {
@@ -62,8 +57,6 @@ const mergeFinanceData = (hostData: FinanceData, clientData: FinanceData): Finan
 const ProfilePage: React.FC = () => {
     const { user, logout } = useAuth();
     const { transactions, accounts, conversationHistory, lastUpdated, clearAllData, setData } = useFinance();
-    const { apiKey, saveApiKey, removeApiKey } = useApiKey();
-    const [keyInput, setKeyInput] = useState('');
 
     // --- State and Refs for Device Sync ---
     const [mode, setMode] = useState<'select' | 'host' | 'scan'>('select');
@@ -75,40 +68,16 @@ const ProfilePage: React.FC = () => {
     const qrCanvasRef = useRef<HTMLCanvasElement>(null);
     const scannerRef = useRef<Html5Qrcode | null>(null);
 
-    // This object contains all data, including the API key, for sync.
-    const currentSyncPayload: SyncPayload = {
+    // This object contains only the data properties, suitable for serialization and sync.
+    const currentData: FinanceData = {
         transactions,
         accounts,
         conversationHistory,
         lastUpdated,
-        apiKey,
     };
 
     const addLog = (message: string) => setLog(prev => [message, ...prev.slice(0, 99)]);
     
-    // --- Handlers for API Key ---
-    const handleSaveKey = () => {
-        if (keyInput.trim()) {
-            saveApiKey(keyInput.trim());
-            setKeyInput('');
-            alert('API Key saved successfully!');
-        }
-    };
-
-    const handleRemoveKey = () => {
-        if (window.confirm('Are you sure you want to remove your API key?')) {
-            removeApiKey();
-        }
-    };
-    
-    // --- Handler for Deleting All Data ---
-    const handleDeleteAllDataAndKey = () => {
-        if (window.confirm("Are you sure you want to delete all your financial data AND your saved API key? This action cannot be undone.")) {
-            clearAllData();
-            removeApiKey();
-        }
-    };
-
     // --- Effects for Device Sync ---
 
     // Effect to initialize PeerJS when a mode is selected
@@ -156,7 +125,7 @@ const ProfilePage: React.FC = () => {
         };
     }, [mode]);
 
-    // Effect to generate QR code once peerId is available
+    // FIX: Effect to generate QR code once peerId is available
     useEffect(() => {
         if (mode === 'host' && peerId && qrCanvasRef.current) {
             QRCode.toCanvas(qrCanvasRef.current, peerId, { width: 256, errorCorrectionLevel: 'H' })
@@ -191,63 +160,23 @@ const ProfilePage: React.FC = () => {
     const setupConnectionListeners = (conn: DataConnection) => {
         conn.on('open', () => {
             setConnectionStatus('connected');
-            addLog('Connection established.');
-            // The device that scanned the QR code ('client') sends its data first to initiate the sync.
-            if (mode === 'scan') {
-                addLog("Sending this device's data to the host...");
-                conn.send(currentSyncPayload);
-            }
+            addLog('Connection established! Syncing data...');
+            conn.send(currentData);
         });
-    
+
         conn.on('data', (receivedData: any) => {
-            const remotePayload = receivedData as SyncPayload;
+            addLog("Received data from peer. Merging...");
+            const remoteData = receivedData as FinanceData;
+            const mergedData = mode === 'host'
+                ? mergeFinanceData(currentData, remoteData)
+                : mergeFinanceData(remoteData, currentData);
             
-            if (mode === 'host') {
-                // HOST: Receives client data, merges everything, and sends the final version back.
-                addLog("Received data from peer. Merging as the host...");
-                
-                const hostPayload = currentSyncPayload; // This device's data
-                const finalFinanceData = mergeFinanceData(hostPayload, remotePayload);
-                
-                // API Key Logic: Host's key takes priority.
-                const finalApiKey = hostPayload.apiKey || remotePayload.apiKey;
-    
-                // Update the host device's state with the merged result.
-                setData(finalFinanceData);
-                if (finalApiKey && !hostPayload.apiKey) {
-                    saveApiKey(finalApiKey); // Save if host didn't have one but client did
-                }
-    
-                const finalPayload: SyncPayload = {
-                    ...finalFinanceData,
-                    apiKey: finalApiKey,
-                };
-    
-                addLog("Merge complete. Sending final data back to peer.");
-                conn.send(finalPayload);
-                setTimeout(() => conn.close(), 1000); // Close connection after sending final data
-            } else {
-                // CLIENT: Receives the final merged data from the host and applies it.
-                addLog("Received final merged data from host. Applying updates...");
-                
-                const finalFinanceData: FinanceData = {
-                    transactions: remotePayload.transactions,
-                    accounts: remotePayload.accounts,
-                    conversationHistory: remotePayload.conversationHistory,
-                    lastUpdated: remotePayload.lastUpdated,
-                };
-                setData(finalFinanceData);
-                
-                if (remotePayload.apiKey) {
-                    saveApiKey(remotePayload.apiKey);
-                    addLog("API Key has been synced from the host device.");
-                }
-                
-                addLog("Sync complete! This device is now up-to-date.");
-                conn.close(); // Client closes connection upon receiving final data.
-            }
+            setData(mergedData);
+            addLog("Sync complete! Your data is now up-to-date.");
+            conn.send(mergedData); // Send final merged data back
+            setTimeout(() => conn.close(), 1000);
         });
-    
+
         conn.on('close', () => {
             setConnectionStatus('disconnected');
             addLog("Connection closed.");
@@ -312,45 +241,6 @@ const ProfilePage: React.FC = () => {
                     </div>
                 </div>
             </Card>
-            
-            <Card>
-                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <SparklesIcon className="w-5 h-5 text-text-secondary"/>
-                    Gemini API Key
-                </h2>
-                <p className="text-text-secondary text-sm mb-4">
-                    To use the AI Agent for processing files and commands, you need a Google Gemini API key. You can get a free key from {' '}
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-accent underline">
-                        Google AI Studio
-                    </a>.
-                </p>
-                <div className="space-y-3">
-                    {apiKey ? (
-                        <div className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                            <p className="text-positive-text font-medium">API Key is set.</p>
-                            <button onClick={handleRemoveKey} className="text-sm text-negative-text hover:underline">Remove Key</button>
-                        </div>
-                    ) : (
-                         <p className="text-negative-text font-medium p-3 rounded-lg bg-negative/10">API Key is not set.</p>
-                    )}
-                    <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="password"
-                          value={keyInput}
-                          onChange={(e) => setKeyInput(e.target.value)}
-                          placeholder="Paste your API key here"
-                          className="flex-grow bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
-                        />
-                        <button
-                          onClick={handleSaveKey}
-                          disabled={!keyInput.trim()}
-                          className="bg-accent text-white font-semibold py-2 px-4 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Save Key
-                        </button>
-                    </div>
-                </div>
-            </Card>
 
             <Card>
                 <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
@@ -403,7 +293,7 @@ const ProfilePage: React.FC = () => {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
                     <button 
-                    onClick={handleDeleteAllDataAndKey}
+                    onClick={clearAllData}
                     className="w-full sm:w-auto flex-grow flex justify-center items-center gap-2 bg-negative/10 hover:bg-negative/20 text-negative-text font-semibold py-2 px-4 rounded-lg transition-colors"
                     >
                         <TrashIcon className="w-4 h-4" />

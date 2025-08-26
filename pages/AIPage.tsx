@@ -1,11 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { useFinance } from '../hooks/useFinance';
 import { processUserCommand, parseFileWithAI } from '../services/geminiService';
 import { SendIcon, SparklesIcon, PaperclipIcon } from '../components/Icons';
 import { Transaction } from '../types';
 import Card from '../components/Card';
-import { useApiKey } from '../hooks/useApiKey';
 
 interface Message {
   id: string;
@@ -22,7 +20,6 @@ const formatCurrency = (value: number) => {
 
 export const AIPage: React.FC = () => {
   const { transactions, accounts, addTransaction, addMultipleTransactions, addAccounts, addConversation, renameAccount, conversationHistory } = useFinance();
-  const { apiKey } = useApiKey();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -31,15 +28,6 @@ export const AIPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!apiKey) {
-      setMessages([{
-          id: 'init-no-key',
-          sender: 'ai',
-          text: "Welcome to the AI Agent! To get started, you'll need to add your Google Gemini API key. Please go to your Profile & Settings page to add it."
-      }]);
-      return;
-    }
-    
     if (conversationHistory.length > 0) {
         const historyMessages: Message[] = conversationHistory
             .map(c => [
@@ -52,7 +40,7 @@ export const AIPage: React.FC = () => {
     } else {
         setMessages([{ id: 'init', sender: 'ai', text: "Hello! How can I help? You can describe a transaction, ask a financial question, or upload a statement (CSV, PDF, or screenshot)." }]);
     }
-  }, [conversationHistory, apiKey]);
+  }, [conversationHistory]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -66,7 +54,7 @@ export const AIPage: React.FC = () => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!input.trim() && !selectedFile) || isLoading || !apiKey) return;
+    if ((!input.trim() && !selectedFile) || isLoading) return;
 
     const userMessageText = selectedFile ? `${input.trim()} (File: ${selectedFile.name})` : input.trim();
     const userMessage: Message = { id: Date.now().toString(), sender: 'user', text: userMessageText };
@@ -208,26 +196,21 @@ export const AIPage: React.FC = () => {
             )}
             <div className="flex items-center space-x-2">
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept=".csv,image/png,image/jpeg,application/pdf" />
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isLoading || !apiKey} className="text-text-secondary hover:text-accent p-2.5 rounded-lg disabled:text-gray-600 disabled:cursor-not-allowed">
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isLoading} className="text-text-secondary hover:text-accent p-2.5 rounded-lg disabled:text-gray-600 disabled:cursor-not-allowed">
                     <PaperclipIcon className="w-5 h-5" />
                 </button>
                 <input
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder={!apiKey ? 'Set your API key in Profile to begin...' : (selectedFile ? 'Add a comment... (optional)' : 'e.g., I spent $15 on coffee')}
-                  disabled={isLoading || !apiKey}
+                  placeholder={selectedFile ? 'Add a comment... (optional)' : 'e.g., I spent $15 on coffee'}
+                  disabled={isLoading}
                   className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
                 />
-                <button type="submit" disabled={isLoading || (!input.trim() && !selectedFile) || !apiKey} className="bg-accent text-white p-2.5 rounded-lg disabled:bg-secondary disabled:cursor-not-allowed transition-colors">
+                <button type="submit" disabled={isLoading || (!input.trim() && !selectedFile)} className="bg-accent text-white p-2.5 rounded-lg disabled:bg-secondary disabled:cursor-not-allowed transition-colors">
                   <SendIcon className="w-5 h-5" />
                 </button>
             </div>
-            {!apiKey && (
-              <p className="text-xs text-center text-text-secondary">
-                  The AI Agent is disabled. <Link to="/profile" className="text-accent underline">Set your API Key</Link> to enable it.
-              </p>
-            )}
           </form>
         </div>
       </Card>

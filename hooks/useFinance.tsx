@@ -264,7 +264,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const removeHolding = (payload: { accountId: string, holdingId: string }) => dispatch({ type: 'REMOVE_HOLDING', payload });
     const setData = (data: FinanceData) => dispatch({ type: 'SET_DATA', payload: data });
     const clearAllData = () => {
-        if (user) {
+        if (user && window.confirm("Are you sure you want to delete all your financial data? This action cannot be undone.")) {
             const LOCAL_STORAGE_KEY = `finTrackData_${user.email}`;
             localStorage.removeItem(LOCAL_STORAGE_KEY);
             dispatch({ type: 'CLEAR_DATA' });

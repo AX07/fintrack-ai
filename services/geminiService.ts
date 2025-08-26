@@ -2,19 +2,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, TransactionCategory, FinanceData, Account, AssetCategory, Holding, transactionCategories } from '../types';
 
-function getApiKey(): string | null {
-    try {
-        return localStorage.getItem('finTrackGeminiApiKey');
-    } catch {
-        return null;
-    }
+if (!process.env.API_KEY) {
+    console.warn("API_KEY environment variable not set. AI features will not work.");
 }
 
-const getAiInstance = () => {
-    const apiKey = getApiKey();
-    if (!apiKey) return null;
-    return new GoogleGenAI({ apiKey });
-};
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || " " });
 
 const assetCategories: AssetCategory[] = ['Bank Accounts', 'Equities', 'Bonds', 'Crypto', 'Commodities', 'Real Estate'];
 
@@ -111,11 +103,6 @@ const commandResponseSchema = {
 };
 
 export const parseFileWithAI = async (file: File, prompt: string): Promise<{ transactions: Transaction[], accounts: Omit<Account, 'id'>[] }> => {
-    const ai = getAiInstance();
-    if (!ai) {
-        throw new Error("Gemini API Key not set. Please add it in your Profile page.");
-    }
-    
     const fileToGenerativePart = (file: File) => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -175,16 +162,11 @@ Your output should be a JSON with:
 
     } catch (error) {
         console.error("Error parsing file with AI:", error);
-        throw new Error("AI processing failed. Please check your API Key and ensure the uploaded file is a clear document (CSV, image, or PDF).");
+        throw new Error("Failed to process the file. Ensure it's a clear document (CSV, image, or PDF).");
     }
 };
 
 export const processUserCommand = async (query: string, financeData: { transactions: Transaction[], accounts: Account[] }): Promise<any> => {
-    const ai = getAiInstance();
-    if (!ai) {
-        return { ai_response: "I can't help with that because the Gemini API Key is not set. Please add it on the Profile page." };
-    }
-    
     const { accounts } = financeData;
     const accountNames = accounts.map(a => a.name);
 
@@ -237,6 +219,6 @@ export const processUserCommand = async (query: string, financeData: { transacti
     } catch (error) {
         console.error("Error processing user command:", error);
         console.error("Failing query:", query);
-        return { ai_response: "I couldn't connect to the AI service. Please check that your API Key is correct and your internet connection is stable." };
+        return { ai_response: "I had some trouble processing that. Could you please try rephrasing?" };
     }
 };
