@@ -104,85 +104,96 @@ const LoginPage: React.FC = () => {
         }
     }, [login, setData, saveApiKey, navigate]);
     
-    const onScanSuccess = useCallback(async (decodedText: string) => {
-        if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+    // This effect runs when all QR chunks are collected
+    useEffect(() => {
+        if (scanProgress && scanProgress.total > 0 && scanProgress.collected === scanProgress.total) {
+            const processData = async () => {
+                if (scannerRef.current?.isScanning) {
+                    await scannerRef.current.stop();
+                }
 
+                let reassembledData = '';
+                for (let i = 1; i <= scanProgress.total; i++) {
+                    reassembledData += scanProgress.chunks[i] || '';
+                }
+                
+                resetScanState(); // Clear progress for next potential scan
+
+                let payload: SyncPayload | null = null;
+                if (reassembledData.startsWith('FINT_V2:')) {
+                    try {
+                        const base64String = reassembledData.substring('FINT_V2:'.length);
+                        const compressedBinaryStr = atob(base64String);
+                        const compressedData = Uint8Array.from(compressedBinaryStr, c => c.charCodeAt(0));
+                        const jsonString = pako.inflate(compressedData, { to: 'string' });
+                        payload = fromV2Format(JSON.parse(jsonString));
+                    } catch (e) { console.error("Failed to parse V2 QR code", e); }
+                } else if (reassembledData.startsWith('FINT_C_V1:')) {
+                    try {
+                        const base64String = reassembledData.substring('FINT_C_V1:'.length);
+                        const compressedBinaryStr = atob(base64String);
+                        const compressedData = Uint8Array.from(compressedBinaryStr, c => c.charCodeAt(0));
+                        const jsonString = pako.inflate(compressedData, { to: 'string' });
+                        payload = JSON.parse(jsonString);
+                    } catch (e) { console.error("Failed to parse V1 QR code", e); }
+                } else {
+                    try {
+                        payload = JSON.parse(reassembledData);
+                    } catch (e) { /* Not JSON */ }
+                }
+                processPayload(payload);
+            };
+
+            processData();
+        }
+    }, [scanProgress, processPayload, resetScanState]);
+
+    const onScanSuccess = useCallback((decodedText: string) => {
+        if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
         const trimmedText = decodedText.trim();
         
-        // --- Multi-part QR Code Handling ---
+        // Handle multi-part QR codes
         if (trimmedText.startsWith('FINT_M_V1:')) {
             const parts = trimmedText.split(':');
-            if (parts.length < 5) return; // Ignore invalid format
+            if (parts.length < 5) return;
             
             const [, sessionId, indexStr, totalStr, ...dataParts] = parts;
             const data = dataParts.join(':');
             const index = parseInt(indexStr, 10);
             const total = parseInt(totalStr, 10);
 
-            let currentProgress = scanProgress;
-            if (!currentProgress || currentProgress.sessionId !== sessionId) {
-                currentProgress = { sessionId, total, collected: 0, chunks: {} };
-            }
-            
-            if (!currentProgress.chunks[index]) {
-                setScanFeedback(true); // Trigger feedback
-                setTimeout(() => setScanFeedback(false), 300); // Reset after 300ms
-
-                const newChunks = { ...currentProgress.chunks, [index]: data };
-                const collected = Object.keys(newChunks).length;
-                const newProgressState = { ...currentProgress, chunks: newChunks, collected };
-                setScanProgress(newProgressState);
-
-                if (collected === total) {
-                    if (scannerRef.current?.isScanning) {
-                        await scannerRef.current.stop();
-                    }
-
-                    let reassembledData = '';
-                    for (let i = 1; i <= total; i++) {
-                        reassembledData += newChunks[i];
-                    }
-                    
-                    resetScanState();
-                    return onScanSuccess(reassembledData); // Recursively call with reassembled data
+            setScanProgress(prevProgress => {
+                let currentProgress = prevProgress;
+                if (!currentProgress || currentProgress.sessionId !== sessionId) {
+                    currentProgress = { sessionId, total, collected: 0, chunks: {} };
                 }
-            }
+                
+                if (!currentProgress.chunks[index]) {
+                    setScanFeedback(true);
+                    setTimeout(() => setScanFeedback(false), 300);
+
+                    const newChunks = { ...currentProgress.chunks, [index]: data };
+                    const collected = Object.keys(newChunks).length;
+                    return { ...currentProgress, chunks: newChunks, collected };
+                }
+                return prevProgress;
+            });
             
             scanTimeoutRef.current = window.setTimeout(() => {
                 setScanError("Scan timed out. Please try again from the beginning.");
                 resetScanState();
-            }, 5000); // 5 second timeout
+            }, 5000);
             return;
         }
         
-        // --- Single QR Code Handling ---
-        if (scannerRef.current?.isScanning) await scannerRef.current.stop();
-        
-        let payload: SyncPayload | null = null;
-        if (trimmedText.startsWith('FINT_V2:')) {
-            try {
-                const base64String = trimmedText.substring('FINT_V2:'.length);
-                const compressedBinaryStr = atob(base64String);
-                const compressedData = Uint8Array.from(compressedBinaryStr, c => c.charCodeAt(0));
-                const jsonString = pako.inflate(compressedData, { to: 'string' });
-                payload = fromV2Format(JSON.parse(jsonString));
-            } catch (e) { console.error("Failed to parse V2 QR code", e); }
-        } else if (trimmedText.startsWith('FINT_C_V1:')) {
-            try {
-                const base64String = trimmedText.substring('FINT_C_V1:'.length);
-                const compressedBinaryStr = atob(base64String);
-                const compressedData = Uint8Array.from(compressedBinaryStr, c => c.charCodeAt(0));
-                const jsonString = pako.inflate(compressedData, { to: 'string' });
-                payload = JSON.parse(jsonString);
-            } catch (e) { console.error("Failed to parse V1 QR code", e); }
-        } else {
-            try {
-                payload = JSON.parse(trimmedText);
-            } catch (e) { /* Not JSON */ }
-        }
-
-        processPayload(payload);
-    }, [processPayload, resetScanState, scanProgress]);
+        // Handle single QR codes by immediately setting progress to complete
+        setScanProgress({
+            sessionId: 'single',
+            total: 1,
+            collected: 1,
+            chunks: { 1: trimmedText }
+        });
+    }, [resetScanState]);
     
     const startScanner = useCallback(() => {
         resetScanState();

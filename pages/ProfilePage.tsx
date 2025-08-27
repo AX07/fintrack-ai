@@ -149,7 +149,7 @@ const ProfilePage: React.FC = () => {
                         drawQrCode(nextIndex);
                         return nextIndex;
                     });
-                }, 700); // Slower animation speed
+                }, 700); // Slower animation speed for better scanning reliability
             }
 
         } else {
