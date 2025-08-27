@@ -121,46 +121,46 @@ export const AIPage: React.FC = () => {
         const commandResponse = await processUserCommand(textPrompt, { transactions, accounts, transactionCategories }, conversationHistory);
         aiResponseText = commandResponse.ai_response;
 
-        if (commandResponse.action && commandResponse.parameters) {
-          switch (commandResponse.action) {
-            case 'create_account':
-              if (commandResponse.parameters.accounts && commandResponse.parameters.accounts.length > 0) {
-                addAccounts(commandResponse.parameters.accounts);
-              } else {
-                aiResponseText = "I was ready to create an account, but the details were missing. Could you please clarify?";
-              }
-              break;
-            case 'rename_account':
-              if (commandResponse.parameters.oldName && commandResponse.parameters.newName) {
-                renameAccount({
-                  oldName: commandResponse.parameters.oldName,
-                  newName: commandResponse.parameters.newName
-                });
-              } else {
-                aiResponseText = "I seem to be missing the details to rename the account. Please try again.";
-              }
-              break;
-            case 'trigger_merge_flow':
-                // The AI response is already set, just open the modal
-                setMergeState({ isActive: true, source: null, destination: null });
-                break;
-            case 'create_transaction':
-              const params = commandResponse.parameters;
-              if (params.amount && params.description && params.category && params.date) {
-                  const newTransaction: Transaction = {
-                      id: `txn-${Date.now()}`,
-                      date: params.date,
-                      description: params.description,
-                      amount: params.amount,
-                      category: params.category,
-                      accountName: params.accountName,
-                  };
-                  addTransaction(newTransaction);
-              } else {
-                  aiResponseText = "I couldn't quite get all the details for that transaction. Could you be more specific about the amount, description, and date?";
-              }
-              break;
-          }
+        if (commandResponse.action) {
+            const params = commandResponse.parameters;
+            switch (commandResponse.action) {
+                case 'create_account':
+                    if (params && params.accounts && params.accounts.length > 0) {
+                        addAccounts(params.accounts);
+                    } else {
+                        aiResponseText = "I was ready to create an account, but the details were missing. Could you please clarify?";
+                    }
+                    break;
+                case 'rename_account':
+                    if (params && params.oldName && params.newName) {
+                        renameAccount({
+                            oldName: params.oldName,
+                            newName: params.newName
+                        });
+                    } else {
+                        aiResponseText = "I seem to be missing the details to rename the account. Please try again.";
+                    }
+                    break;
+                case 'trigger_merge_flow':
+                    // This action has no parameters.
+                    setMergeState({ isActive: true, source: null, destination: null });
+                    break;
+                case 'create_transaction':
+                    if (params && params.amount && params.description && params.category && params.date) {
+                        const newTransaction: Transaction = {
+                            id: `txn-${Date.now()}`,
+                            date: params.date,
+                            description: params.description,
+                            amount: params.amount,
+                            category: params.category,
+                            accountName: params.accountName,
+                        };
+                        addTransaction(newTransaction);
+                    } else {
+                        aiResponseText = "I couldn't quite get all the details for that transaction. Could you be more specific about the amount, description, and date?";
+                    }
+                    break;
+            }
         }
 
         if (!aiResponseText) {

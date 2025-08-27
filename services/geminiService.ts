@@ -228,7 +228,7 @@ export const processUserCommand = async (query: string, financeData: { transacti
         Interaction Rules:
         - ALWAYS provide a friendly 'ai_response'.
         - Use the conversational context to understand follow-up questions and pronouns.
-        - If you trigger \`trigger_merge_flow\`, your \`ai_response\` should be something like "Of course, I can help with that. Please select the accounts you'd like to merge."
+        - When the user asks to merge, combine, or consolidate accounts, you MUST use the \`trigger_merge_flow\` action. DO NOT ask for account names in your text response; the application UI will handle that. Your \`ai_response\` should confirm you are starting the process, for example: "Of course. I can help with that. Please select the accounts you'd like to merge from the dialog."
         - If an account name in a 'create_account' action already exists, it will be updated.
         - If a request is ambiguous, ask for clarification in your 'ai_response' and do not return an action.
         - Your final output must be a single JSON object matching the provided schema.

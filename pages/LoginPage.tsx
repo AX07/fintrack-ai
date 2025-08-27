@@ -70,6 +70,7 @@ const LoginPage: React.FC = () => {
     const [mode, setMode] = useState<'create' | 'scan'>('create');
     const [scanError, setScanError] = useState<string | null>(null);
     const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+    const [scanFeedback, setScanFeedback] = useState(false); // For visual feedback on scan
     
     const { createUserAndLogin, login, isAuthenticated } = useAuth();
     const { saveApiKey } = useApiKey();
@@ -124,6 +125,9 @@ const LoginPage: React.FC = () => {
             }
             
             if (!currentProgress.chunks[index]) {
+                setScanFeedback(true); // Trigger feedback
+                setTimeout(() => setScanFeedback(false), 300); // Reset after 300ms
+
                 const newChunks = { ...currentProgress.chunks, [index]: data };
                 const collected = Object.keys(newChunks).length;
                 const newProgressState = { ...currentProgress, chunks: newChunks, collected };
@@ -275,7 +279,10 @@ const LoginPage: React.FC = () => {
                         <p className="text-sm text-text-secondary text-center mb-6">
                             Scan the animated code from another device to clone its profile.
                         </p>
-                        <div id="qr-reader" className="w-full rounded-lg overflow-hidden border-2 border-secondary bg-black"></div>
+                        <div 
+                            id="qr-reader" 
+                            className={`w-full rounded-lg overflow-hidden border-2 bg-black transition-all duration-200 ${scanFeedback ? 'border-accent shadow-lg shadow-accent/50' : 'border-secondary'}`}
+                        ></div>
                         {scanProgress && (
                             <p className="text-lg text-accent text-center font-semibold mt-4 animate-pulse">
                                 Scanning... {scanProgress.collected} / {scanProgress.total} parts received.
