@@ -3,8 +3,8 @@ import React, { useState, useMemo, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import Card from '../components/Card';
 import { useFinance } from '../hooks/useFinance';
-import { Transaction, transactionCategories, TransactionCategory } from '../types';
-import { PencilIcon, TrashIcon, XIcon } from '../components/Icons';
+import { Transaction, TransactionCategory } from '../types';
+import { PencilIcon, TrashIcon, XIcon, PlusIcon } from '../components/Icons';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-US', {
@@ -18,12 +18,16 @@ const CategoryPill: React.FC<{ category: string }> = ({ category }) => (
 );
 
 const SpendingPage: React.FC = () => {
-    const { transactions, accounts, updateTransaction, deleteTransaction, updateTransactionsCategory } = useFinance();
+    const { transactions, accounts, updateTransaction, deleteTransaction, updateTransactionsCategory, transactionCategories, addTransactionCategory } = useFinance();
     const [activeTab, setActiveTab] = useState('All');
     const [isEditing, setIsEditing] = useState(false);
     const [editedTransactions, setEditedTransactions] = useState<Record<string, Partial<Transaction>>>({});
     const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
     const transactionsCardRef = useRef<HTMLDivElement>(null);
+    
+    const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState('');
+
     const [updateModal, setUpdateModal] = useState<{
         isOpen: boolean;
         originalTransaction: Transaction;
@@ -151,8 +155,50 @@ const SpendingPage: React.FC = () => {
         setUpdateModal(null);
     };
 
+    const handleSaveNewCategory = (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmedName = newCategoryName.trim();
+        if (trimmedName && !transactionCategories.find(c => c.toLowerCase() === trimmedName.toLowerCase())) {
+            addTransactionCategory(trimmedName);
+            setNewCategoryName('');
+            setIsAddCategoryModalOpen(false);
+        } else {
+            alert("Category is empty or already exists.");
+        }
+    };
+
   return (
     <div className="space-y-6">
+      {isAddCategoryModalOpen && (
+         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" aria-modal="true" role="dialog">
+            <Card className="max-w-sm w-full">
+                <h2 className="text-xl font-bold mb-4">Add New Category</h2>
+                <form onSubmit={handleSaveNewCategory}>
+                    <label htmlFor="new-category-name" className="block text-sm font-medium text-text-secondary mb-1">
+                        Category Name
+                    </label>
+                    <input
+                        id="new-category-name"
+                        type="text"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                        placeholder="e.g., Subscriptions"
+                        autoFocus
+                    />
+                    <div className="flex justify-end gap-3 mt-6">
+                        <button type="button" onClick={() => setIsAddCategoryModalOpen(false)} className="bg-secondary hover:bg-primary text-text-primary font-semibold py-2 px-4 rounded-lg transition-colors">
+                            Cancel
+                        </button>
+                        <button type="submit" className="bg-accent hover:opacity-90 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                            Save Category
+                        </button>
+                    </div>
+                </form>
+            </Card>
+        </div>
+      )}
+
       {updateModal?.isOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" aria-modal="true" role="dialog">
             <Card className="max-w-md w-full">
@@ -255,12 +301,32 @@ const SpendingPage: React.FC = () => {
                     </span>
                 )}
             </h2>
-            <button
-                onClick={handleEditToggle}
-                className="flex items-center justify-center gap-2 bg-secondary hover:bg-primary text-text-primary font-semibold py-2 px-4 rounded-lg transition-colors"
-            >
-                {isEditing ? 'Done' : <><PencilIcon className="w-4 h-4" /> Edit Transactions</>}
-            </button>
+            <div className="flex items-center gap-3">
+                {isEditing ? (
+                    <>
+                        <button
+                            onClick={() => setIsAddCategoryModalOpen(true)}
+                            className="flex items-center justify-center gap-2 bg-secondary hover:bg-primary text-text-primary font-semibold py-2 px-4 rounded-lg transition-colors"
+                        >
+                            <PlusIcon className="w-4 h-4" />
+                            Add Category
+                        </button>
+                        <button
+                            onClick={handleEditToggle}
+                            className="flex items-center justify-center bg-accent text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                        >
+                            Done
+                        </button>
+                    </>
+                ) : (
+                    <button
+                        onClick={handleEditToggle}
+                        className="flex items-center justify-center gap-2 bg-secondary hover:bg-primary text-text-primary font-semibold py-2 px-4 rounded-lg transition-colors"
+                    >
+                        <PencilIcon className="w-4 h-4" /> Edit Transactions
+                    </button>
+                )}
+            </div>
         </div>
         <div className="border-b border-secondary">
             <nav className="-mb-px flex space-x-6 overflow-x-auto">

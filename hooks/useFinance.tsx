@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
-import { Transaction, Account, FinanceData, Holding, Conversation, TransactionCategory } from '../types';
+import { Transaction, Account, FinanceData, Holding, Conversation, TransactionCategory, defaultTransactionCategories } from '../types';
 import { useAuth } from './useAuth';
 
 // MOCK DATA for a clean slate
@@ -7,6 +7,7 @@ const initialData: FinanceData = {
     transactions: [],
     accounts: [],
     conversationHistory: [],
+    transactionCategories: defaultTransactionCategories,
     lastUpdated: new Date().toISOString(),
 };
 
@@ -15,7 +16,9 @@ type Action =
     | { type: 'ADD_MULTIPLE_TRANSACTIONS'; payload: Transaction[] }
     | { type: 'ADD_ACCOUNTS'; payload: Omit<Account, 'id'>[] }
     | { type: 'ADD_CONVERSATION'; payload: Conversation }
+    | { type: 'ADD_TRANSACTION_CATEGORY'; payload: string }
     | { type: 'RENAME_ACCOUNT'; payload: { oldName: string; newName: string } }
+    | { type: 'MERGE_ACCOUNTS'; payload: { sourceAccountName: string; destinationAccountName: string } }
     | { type: 'UPDATE_TRANSACTION', payload: Partial<Transaction> & { id: string } }
     | { type: 'UPDATE_TRANSACTIONS_CATEGORY', payload: { ids: string[]; category: TransactionCategory } }
     | { type: 'DELETE_TRANSACTION', payload: { transactionId: string } }
@@ -32,7 +35,9 @@ interface FinanceContextType extends FinanceData {
     addMultipleTransactions: (transactions: Transaction[]) => void;
     addAccounts: (accounts: Omit<Account, 'id'>[]) => void;
     addConversation: (conversation: Conversation) => void;
+    addTransactionCategory: (category: string) => void;
     renameAccount: (payload: { oldName: string; newName: string }) => void;
+    mergeAccounts: (payload: { sourceAccountName: string; destinationAccountName: string }) => void;
     updateTransaction: (transaction: Partial<Transaction> & { id: string }) => void;
     updateTransactionsCategory: (payload: { ids: string[]; category: TransactionCategory }) => void;
     deleteTransaction: (payload: { transactionId: string }) => void;
@@ -112,6 +117,17 @@ const financeReducer = (state: FinanceData, action: Action): FinanceData => {
                 conversationHistory: [action.payload, ...state.conversationHistory],
                 lastUpdated: new Date().toISOString(),
             }
+        case 'ADD_TRANSACTION_CATEGORY': {
+            const newCategory = action.payload.trim();
+            if (newCategory && !state.transactionCategories.find(c => c.toLowerCase() === newCategory.toLowerCase())) {
+                return {
+                    ...state,
+                    transactionCategories: [...state.transactionCategories, newCategory].sort(),
+                    lastUpdated: new Date().toISOString(),
+                };
+            }
+            return state; // Return current state if category is empty or a duplicate
+        }
         case 'RENAME_ACCOUNT': {
             const { oldName, newName } = action.payload;
             const accountIndex = state.accounts.findIndex(acc => acc.name.toLowerCase() === oldName.toLowerCase());
@@ -136,6 +152,59 @@ const financeReducer = (state: FinanceData, action: Action): FinanceData => {
                 ...state,
                 accounts: updatedAccounts,
                 transactions: updatedTransactions,
+                lastUpdated: new Date().toISOString(),
+            };
+        }
+        case 'MERGE_ACCOUNTS': {
+            const { sourceAccountName, destinationAccountName } = action.payload;
+            const sourceAccount = state.accounts.find(acc => acc.name.toLowerCase() === sourceAccountName.toLowerCase());
+            const destAccount = state.accounts.find(acc => acc.name.toLowerCase() === destinationAccountName.toLowerCase());
+        
+            if (!sourceAccount || !destAccount || sourceAccount.id === destAccount.id) {
+                console.warn("Could not merge accounts. One or both accounts not found, or they are the same account.", sourceAccountName, destinationAccountName);
+                return state;
+            }
+        
+            // Re-assign transactions from source to destination
+            const updatedTransactions = state.transactions.map(t => {
+                if (t.accountName?.toLowerCase() === sourceAccount.name.toLowerCase()) {
+                    return { ...t, accountName: destAccount.name };
+                }
+                return t;
+            });
+        
+            // Update destination account balance and filter out the source account
+            const updatedAccounts = state.accounts
+                .map(acc => {
+                    if (acc.id === destAccount.id) {
+                        // Also merge holdings if they exist, avoiding duplicates
+                        const destHoldings = [...(acc.holdings || [])];
+                        sourceAccount.holdings?.forEach(sourceHolding => {
+                            const existingHoldingIndex = destHoldings.findIndex(dh => dh.name.toLowerCase() === sourceHolding.name.toLowerCase());
+                            if (existingHoldingIndex !== -1) {
+                                // If holding exists, sum quantity and value
+                                destHoldings[existingHoldingIndex].quantity += sourceHolding.quantity;
+                                destHoldings[existingHoldingIndex].value += sourceHolding.value;
+                            } else {
+                                // Otherwise, add the new holding
+                                destHoldings.push(sourceHolding);
+                            }
+                        });
+
+                        return { 
+                            ...acc, 
+                            balance: acc.balance + sourceAccount.balance,
+                            holdings: destHoldings.length > 0 ? destHoldings : undefined,
+                        };
+                    }
+                    return acc;
+                })
+                .filter(acc => acc.id !== sourceAccount.id);
+        
+            return {
+                ...state,
+                transactions: updatedTransactions,
+                accounts: updatedAccounts,
                 lastUpdated: new Date().toISOString(),
             };
         }
@@ -250,7 +319,10 @@ const financeReducer = (state: FinanceData, action: Action): FinanceData => {
         }
         
         case 'SET_DATA':
-            return action.payload;
+            return {
+                ...action.payload,
+                transactionCategories: action.payload.transactionCategories || defaultTransactionCategories
+            };
         
         case 'CLEAR_DATA':
             return initialData;
@@ -272,7 +344,11 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const parsedData = JSON.parse(storedData);
                 // Basic validation and add lastUpdated if missing
                 if (parsedData.transactions && parsedData.accounts && parsedData.conversationHistory) {
-                    return { ...parsedData, lastUpdated: parsedData.lastUpdated || new Date(0).toISOString() };
+                    return { 
+                        ...parsedData, 
+                        lastUpdated: parsedData.lastUpdated || new Date(0).toISOString(),
+                        transactionCategories: parsedData.transactionCategories || defaultTransactionCategories,
+                    };
                 }
             }
         } catch (error) {
@@ -297,7 +373,9 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const addMultipleTransactions = (transactions: Transaction[]) => dispatch({ type: 'ADD_MULTIPLE_TRANSACTIONS', payload: transactions });
     const addAccounts = (accounts: Omit<Account, 'id'>[]) => dispatch({ type: 'ADD_ACCOUNTS', payload: accounts });
     const addConversation = (conversation: Conversation) => dispatch({ type: 'ADD_CONVERSATION', payload: conversation });
+    const addTransactionCategory = (category: string) => dispatch({ type: 'ADD_TRANSACTION_CATEGORY', payload: category });
     const renameAccount = (payload: { oldName: string; newName: string }) => dispatch({ type: 'RENAME_ACCOUNT', payload });
+    const mergeAccounts = (payload: { sourceAccountName: string; destinationAccountName: string }) => dispatch({ type: 'MERGE_ACCOUNTS', payload });
     const updateTransaction = (transaction: Partial<Transaction> & { id: string }) => dispatch({ type: 'UPDATE_TRANSACTION', payload: transaction });
     const updateTransactionsCategory = (payload: { ids: string[]; category: TransactionCategory }) => dispatch({ type: 'UPDATE_TRANSACTIONS_CATEGORY', payload });
     const deleteTransaction = (payload: { transactionId: string }) => dispatch({ type: 'DELETE_TRANSACTION', payload });
@@ -315,7 +393,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
     };
 
-    const value = { ...state, addTransaction, addMultipleTransactions, addAccounts, addConversation, renameAccount, updateTransaction, updateTransactionsCategory, deleteTransaction, updateAccount, deleteAccount, addHolding, updateHolding, removeHolding, setData, clearAllData };
+    const value = { ...state, addTransaction, addMultipleTransactions, addAccounts, addConversation, addTransactionCategory, renameAccount, mergeAccounts, updateTransaction, updateTransactionsCategory, deleteTransaction, updateAccount, deleteAccount, addHolding, updateHolding, removeHolding, setData, clearAllData };
 
     return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
 };

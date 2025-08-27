@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useFinance } from '../hooks/useFinance';
 import { processUserCommand, parseFileWithAI } from '../services/geminiService';
 import { SendIcon, SparklesIcon, PaperclipIcon } from '../components/Icons';
-import { Transaction } from '../types';
+import { Transaction, Account } from '../types';
 import Card from '../components/Card';
 import { useApiKey } from '../hooks/useApiKey';
 
@@ -21,12 +21,17 @@ const formatCurrency = (value: number) => {
 };
 
 export const AIPage: React.FC = () => {
-  const { transactions, accounts, addTransaction, addMultipleTransactions, addAccounts, addConversation, renameAccount, conversationHistory } = useFinance();
+  const { transactions, accounts, transactionCategories, addTransaction, addMultipleTransactions, addAccounts, addConversation, renameAccount, mergeAccounts, conversationHistory } = useFinance();
   const { apiKey } = useApiKey();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [mergeState, setMergeState] = useState<{ isActive: boolean; source: string | null; destination: string | null; }>({
+    isActive: false,
+    source: null,
+    destination: null,
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,8 +87,7 @@ export const AIPage: React.FC = () => {
     try {
       let aiResponseText: string;
       if (fileToProcess) {
-        const parsedData = await parseFileWithAI(fileToProcess, textPrompt);
-        const { transactions: parsedTransactions, accounts: parsedAccounts } = parsedData;
+        const { transactions: parsedTransactions, accounts: parsedAccounts, duplicates_found } = await parseFileWithAI(fileToProcess, textPrompt, transactionCategories, transactions);
         
         const hasTransactions = parsedTransactions && parsedTransactions.length > 0;
         const hasAccounts = parsedAccounts && parsedAccounts.length > 0;
@@ -95,19 +99,26 @@ export const AIPage: React.FC = () => {
             addAccounts(parsedAccounts);
         }
 
-        if (hasAccounts && hasTransactions) {
-            const account = parsedAccounts[0];
-            aiResponseText = `Success! From ${fileToProcess.name}, I've added ${parsedTransactions.length} transactions and updated the '${account.name}' account. The new balance is ${formatCurrency(account.balance)}.`;
-        } else if (hasAccounts) {
-            const account = parsedAccounts[0];
-            aiResponseText = `Success! I've created or updated the '${account.name}' account from ${fileToProcess.name} with a balance of ${formatCurrency(account.balance)}. No new transactions were found.`;
-        } else if (hasTransactions) {
-            aiResponseText = `Success! I've added ${parsedTransactions.length} transactions from ${fileToProcess.name}. I couldn't identify a specific account to update, so you may want to assign them manually.`;
-        } else {
-            aiResponseText = `I couldn't find any valid transactions or accounts in ${fileToProcess.name}. Please ensure the file is clear and contains financial data.`;
+        let summary = '';
+        if (hasTransactions) {
+            summary += `I've added ${parsedTransactions.length} new transaction(s). `;
         }
+        if (hasAccounts) {
+            const account = parsedAccounts[0];
+            summary += `I've created or updated the '${account.name}' account with a new balance of ${formatCurrency(account.balance)}. `;
+        }
+        if (duplicates_found > 0) {
+            summary += `I also skipped ${duplicates_found} duplicate transaction(s) that were already logged. `;
+        }
+
+        if (summary) {
+            aiResponseText = `Success! From ${fileToProcess.name}, ${summary.trim()}`;
+        } else {
+            aiResponseText = `I processed ${fileToProcess.name} but found no new information to add. It seems all transactions were duplicates.`;
+        }
+
       } else {
-        const commandResponse = await processUserCommand(textPrompt, { transactions, accounts });
+        const commandResponse = await processUserCommand(textPrompt, { transactions, accounts, transactionCategories }, conversationHistory);
         aiResponseText = commandResponse.ai_response;
 
         if (commandResponse.action && commandResponse.parameters) {
@@ -129,6 +140,10 @@ export const AIPage: React.FC = () => {
                 aiResponseText = "I seem to be missing the details to rename the account. Please try again.";
               }
               break;
+            case 'trigger_merge_flow':
+                // The AI response is already set, just open the modal
+                setMergeState({ isActive: true, source: null, destination: null });
+                break;
             case 'create_transaction':
               const params = commandResponse.parameters;
               if (params.amount && params.description && params.category && params.date) {
@@ -163,8 +178,86 @@ export const AIPage: React.FC = () => {
     }
   };
 
+  const handleConfirmMerge = () => {
+    if (mergeState.source && mergeState.destination) {
+        mergeAccounts({ 
+            sourceAccountName: mergeState.source, 
+            destinationAccountName: mergeState.destination 
+        });
+        const confirmationText = `I have successfully merged '${mergeState.source}' into '${mergeState.destination}'.`;
+        setMessages(prev => [...prev, { id: `${Date.now()}-ai-merge`, sender: 'ai', text: confirmationText }]);
+        // Add to conversation history so the AI knows the action was completed
+        addConversation({ id: Date.now().toString(), userText: "(User completed account merge via UI)", aiText: confirmationText, timestamp: new Date().toISOString() });
+        setMergeState({ isActive: false, source: null, destination: null });
+    }
+  };
+
+  const handleCancelMerge = () => {
+      setMergeState({ isActive: false, source: null, destination: null });
+  };
+
+  const destinationAccounts = accounts.filter(acc => acc.name !== mergeState.source);
+
   return (
     <div className="space-y-6">
+      {mergeState.isActive && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" aria-modal="true" role="dialog">
+            <Card className="max-w-md w-full">
+                <h2 className="text-xl font-bold mb-4">Merge Accounts</h2>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="source-account" className="block text-sm font-medium text-text-secondary mb-1">
+                            1. Merge FROM this account (will be deleted)
+                        </label>
+                        <select
+                            id="source-account"
+                            value={mergeState.source || ''}
+                            onChange={(e) => setMergeState(prev => ({ ...prev, source: e.target.value, destination: null }))} // Reset destination if source changes
+                            className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                        >
+                            <option value="" disabled>Select an account...</option>
+                            {accounts.map(acc => (
+                                <option key={acc.id} value={acc.name}>{acc.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {mergeState.source && (
+                        <div>
+                            <label htmlFor="destination-account" className="block text-sm font-medium text-text-secondary mb-1">
+                                2. Merge INTO this account (will be kept)
+                            </label>
+                            <select
+                                id="destination-account"
+                                value={mergeState.destination || ''}
+                                onChange={(e) => setMergeState(prev => ({ ...prev, destination: e.target.value }))}
+                                className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                            >
+                                <option value="" disabled>Select an account...</option>
+                                {destinationAccounts.map(acc => (
+                                    <option key={acc.id} value={acc.name}>{acc.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6">
+                    <button onClick={handleCancelMerge} className="bg-secondary hover:bg-primary text-text-primary font-semibold py-2 px-4 rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={handleConfirmMerge} 
+                        disabled={!mergeState.source || !mergeState.destination}
+                        className="bg-accent hover:opacity-90 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Confirm Merge
+                    </button>
+                </div>
+            </Card>
+        </div>
+      )}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">AI Agent</h1>
         <p className="text-text-secondary">Converse with your financial assistant to manage data and gain insights.</p>

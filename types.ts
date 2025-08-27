@@ -5,8 +5,8 @@ export interface User {
   avatar: string;
 }
 
-export type TransactionCategory = 'Income' | 'Food' | 'Transport' | 'Rent' | 'Utilities' | 'Health' | 'Entertainment' | 'Business' | 'Investment' | 'Crypto' | 'Other';
-export const transactionCategories: TransactionCategory[] = ['Income', 'Food', 'Transport', 'Rent', 'Utilities', 'Health', 'Entertainment', 'Business', 'Investment', 'Crypto', 'Other'];
+export type TransactionCategory = string;
+export const defaultTransactionCategories: TransactionCategory[] = ['Income', 'Food', 'Transport', 'Rent', 'Utilities', 'Health', 'Entertainment', 'Business', 'Investment', 'Crypto', 'Other'];
 
 export interface Transaction {
   id: string;
@@ -56,6 +56,7 @@ export interface FinanceData {
     transactions: Transaction[];
     accounts: Account[];
     conversationHistory: Conversation[];
+    transactionCategories: TransactionCategory[];
     lastUpdated: string; // ISO string for sync logic
 }
 

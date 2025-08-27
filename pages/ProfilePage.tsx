@@ -1,5 +1,4 @@
-
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import QRCode from 'qrcode';
 import pako from 'pako';
 import Card from '../components/Card';
@@ -10,55 +9,163 @@ import { exportTransactionsToCSV, exportAccountsToCSV } from '../utils/export';
 import { DownloadIcon, TrashIcon, LogOutIcon, SyncIcon, SparklesIcon } from '../components/Icons';
 import { FinanceData, SyncPayload } from '../types';
 
+// Converts the standard data format to a highly compact array-based format
+const toV2Format = (data: SyncPayload) => {
+    const compactTransactions = data.financeData.transactions.map(t => [
+        t.id,
+        t.date,
+        t.description,
+        t.amount,
+        t.category,
+        t.accountName || null
+    ]);
+
+    const compactAccounts = data.financeData.accounts.map(a => {
+        const compactHoldings = a.holdings?.map(h => [
+            h.id,
+            h.name,
+            h.ticker || null,
+            h.quantity,
+            h.value
+        ]) || [];
+        return [
+            a.id,
+            a.name,
+            a.category,
+            a.institution || null,
+            a.balance,
+            compactHoldings
+        ];
+    });
+
+    const compactFinanceData = {
+        t: compactTransactions,
+        a: compactAccounts,
+        tc: data.financeData.transactionCategories,
+        lu: data.financeData.lastUpdated,
+    };
+    
+    return {
+        u: data.user,
+        d: compactFinanceData, // d for data
+        k: data.apiKey,       // k for key
+    };
+};
+
+const QR_CHUNK_SIZE = 750; // Max size for each QR code chunk in bytes
 
 const ProfilePage: React.FC = () => {
     const { user, logout } = useAuth();
-    const { transactions, accounts, conversationHistory, lastUpdated, clearAllData } = useFinance();
+    const { transactions, accounts, transactionCategories, lastUpdated, clearAllData } = useFinance();
     const { apiKey, saveApiKey, removeApiKey } = useApiKey();
     const [keyInput, setKeyInput] = useState('');
     
     // --- State for New Device Setup ---
     const [showQr, setShowQr] = useState(false);
+    const [qrChunks, setQrChunks] = useState<string[]>([]);
+    const [currentQrIndex, setCurrentQrIndex] = useState(0);
     const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+    const animationIntervalRef = useRef<number | null>(null);
+
+    const stopQrAnimation = () => {
+        if (animationIntervalRef.current) {
+            clearInterval(animationIntervalRef.current);
+            animationIntervalRef.current = null;
+        }
+        setShowQr(false);
+        setQrChunks([]);
+        setCurrentQrIndex(0);
+    };
 
     const handleGenerateQrCode = () => {
-        if (!user || !qrCanvasRef.current) return;
+        if (!user) return;
 
-        const financeData: FinanceData = { transactions, accounts, conversationHistory, lastUpdated };
+        const financeDataForSync: FinanceData = {
+            transactions,
+            accounts,
+            conversationHistory: [], // Exclude history to reduce size
+            transactionCategories,
+            lastUpdated,
+        };
+
         const payload: SyncPayload = {
             user,
-            financeData,
+            financeData: financeDataForSync,
             apiKey: apiKey || '',
         };
 
+        const compactPayload = toV2Format(payload);
+
         try {
-            const jsonString = JSON.stringify(payload);
-            const compressedData = pako.deflate(jsonString);
-            
-            // Convert Uint8Array to a binary string for btoa
+            const jsonString = JSON.stringify(compactPayload);
+            const compressedData = pako.deflate(jsonString, { level: 9 });
+
             let compressedBinaryStr = '';
-            const len = compressedData.length;
-            for (let i = 0; i < len; i++) {
+            for (let i = 0; i < compressedData.length; i++) {
                 compressedBinaryStr += String.fromCharCode(compressedData[i]);
             }
             const base64String = btoa(compressedBinaryStr);
+            const fullPayloadString = `FINT_V2:${base64String}`;
 
-            // Add a version prefix for format detection and backward compatibility
-            const finalPayload = `FINT_C_V1:${base64String}`;
+            // --- Data Chunking Logic ---
+            const sessionId = Date.now().toString(36);
+            const totalChunks = Math.ceil(fullPayloadString.length / QR_CHUNK_SIZE);
+            const chunks: string[] = [];
             
-            QRCode.toCanvas(qrCanvasRef.current, finalPayload, { width: 256, errorCorrectionLevel: 'L' })
-                .then(() => setShowQr(true))
-                .catch(err => {
-                    console.error('QR code generation failed:', err);
-                    alert('Error: Could not generate QR code. The data might be too large.');
-                });
+            for (let i = 0; i < totalChunks; i++) {
+                const chunkData = fullPayloadString.substring(i * QR_CHUNK_SIZE, (i + 1) * QR_CHUNK_SIZE);
+                // Format: FINT_M_V1:{sessionId}:{chunkIndex}:{totalChunks}:{data}
+                const chunkString = `FINT_M_V1:${sessionId}:${i + 1}:${totalChunks}:${chunkData}`;
+                chunks.push(chunkString);
+            }
+
+            setQrChunks(chunks);
+            setShowQr(true);
         } catch (error) {
-            console.error('Data compression/encoding failed:', error);
+            console.error('Data preparation for QR code failed:', error);
             alert('Error: Could not prepare data for QR code. Your profile might be too large.');
         }
     };
+    
+    useEffect(() => {
+        if (showQr && qrChunks.length > 0 && qrCanvasRef.current) {
+            const canvas = qrCanvasRef.current;
 
-    // --- Handlers for API Key ---
+            const drawQrCode = (index: number) => {
+                QRCode.toCanvas(canvas, qrChunks[index], { width: 256, errorCorrectionLevel: 'L' })
+                    .catch(err => {
+                        console.error('QR code frame generation failed:', err);
+                        stopQrAnimation();
+                        alert('An error occurred while generating the animated QR code.');
+                    });
+            };
+
+            drawQrCode(0); // Draw the first frame immediately
+
+            if (qrChunks.length > 1) {
+                animationIntervalRef.current = window.setInterval(() => {
+                    setCurrentQrIndex(prevIndex => {
+                        const nextIndex = (prevIndex + 1) % qrChunks.length;
+                        drawQrCode(nextIndex);
+                        return nextIndex;
+                    });
+                }, 400); // 400ms per frame
+            }
+
+        } else {
+            if (animationIntervalRef.current) {
+                clearInterval(animationIntervalRef.current);
+                animationIntervalRef.current = null;
+            }
+        }
+        
+        return () => {
+            if (animationIntervalRef.current) {
+                clearInterval(animationIntervalRef.current);
+            }
+        };
+    }, [showQr, qrChunks]);
+
     const handleSaveKey = () => {
         if (keyInput.trim()) {
             saveApiKey(keyInput.trim());
@@ -73,12 +180,11 @@ const ProfilePage: React.FC = () => {
         }
     };
     
-    // --- Handler for Deleting All Data ---
     const handleDeleteAllDataAndKey = () => {
         if (window.confirm("Are you sure you want to delete all your financial data AND your saved API key? This action cannot be undone.")) {
             clearAllData();
             removeApiKey();
-            logout(); // Log out after clearing data to prevent issues
+            logout();
         }
     };
     
@@ -144,27 +250,33 @@ const ProfilePage: React.FC = () => {
                     <SyncIcon className="w-5 h-5 text-text-secondary"/>
                     New Device Setup
                 </h2>
-                {showQr ? (
-                     <div className="text-center">
-                        <p className="text-text-secondary mb-4">On your new device, choose "Sign in with QR Code" and scan the image below.</p>
-                        <div className="bg-white p-4 rounded-lg inline-block mx-auto">
-                            <canvas ref={qrCanvasRef}></canvas>
-                        </div>
-                        <button onClick={() => setShowQr(false)} className="mt-4 bg-secondary hover:bg-primary text-text-primary font-semibold py-2 px-4 rounded-lg transition-colors">
+                <p className="text-text-secondary mb-4">
+                    {showQr 
+                        ? 'On your new device, scan the animated QR code below. Keep your camera pointed until all parts are scanned.'
+                        : 'Click the button below to generate a QR code. Scanning this code on a new device will securely clone your entire profile, including all data and your API key.'
+                    }
+                </p>
+                <div className={`text-center ${showQr ? '' : 'hidden'}`}>
+                    <div className="bg-white p-4 rounded-lg inline-block mx-auto relative">
+                        <canvas ref={qrCanvasRef}></canvas>
+                        {showQr && qrChunks.length > 1 && (
+                            <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs font-mono px-1.5 py-0.5 rounded">
+                                {currentQrIndex + 1} / {qrChunks.length}
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <div className="mt-4 text-center">
+                    {showQr ? (
+                        <button onClick={stopQrAnimation} className="bg-secondary hover:bg-primary text-text-primary font-semibold py-2 px-4 rounded-lg transition-colors">
                             Done
                         </button>
-                     </div>
-                ) : (
-                    <div>
-                        <p className="text-text-secondary mb-4">
-                            Click the button below to generate a QR code. Scanning this code on the login screen of a new device will securely clone your entire profile, including all data and your API key.
-                        </p>
+                    ) : (
                         <button onClick={handleGenerateQrCode} className="w-full bg-accent text-white font-semibold py-2.5 rounded-lg hover:opacity-90 transition-opacity">
-                            Generate QR Code
+                            Generate Animated QR Code
                         </button>
-                        <canvas ref={qrCanvasRef} style={{ display: 'none' }}></canvas>
-                    </div>
-                )}
+                    )}
+                </div>
             </Card>
 
             <Card>
