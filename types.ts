@@ -1,4 +1,10 @@
 
+export interface User {
+  id: string;
+  name: string;
+  avatar: string;
+}
+
 export type TransactionCategory = 'Income' | 'Food' | 'Transport' | 'Rent' | 'Utilities' | 'Health' | 'Entertainment' | 'Business' | 'Investment' | 'Crypto' | 'Other';
 export const transactionCategories: TransactionCategory[] = ['Income', 'Food', 'Transport', 'Rent', 'Utilities', 'Health', 'Entertainment', 'Business', 'Investment', 'Crypto', 'Other'];
 
@@ -51,4 +57,10 @@ export interface FinanceData {
     accounts: Account[];
     conversationHistory: Conversation[];
     lastUpdated: string; // ISO string for sync logic
+}
+
+export interface SyncPayload {
+    user: User;
+    financeData: FinanceData;
+    apiKey: string;
 }

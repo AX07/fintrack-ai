@@ -16,7 +16,7 @@ const AppContainer: React.FC = () => {
   // the FinanceProvider and the entire App to re-mount. This is the cleanest
   // way to ensure all state is reset and the correct user's data is loaded.
   return (
-    <FinanceProvider key={user ? user.email : 'logged_out'}>
+    <FinanceProvider key={user ? user.id : 'logged_out'}>
       <App />
     </FinanceProvider>
   );

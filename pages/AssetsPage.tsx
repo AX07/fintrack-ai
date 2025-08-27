@@ -5,7 +5,7 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
 import Card from '../components/Card';
 import { useFinance } from '../hooks/useFinance';
 import { Account, AssetCategory } from '../types';
-import { AssetsIcon, PencilIcon } from '../components/Icons';
+import { AssetsIcon, PencilIcon, TrashIcon } from '../components/Icons';
 import EmptyState from '../components/EmptyState';
 
 const formatCurrency = (value: number) => {
@@ -13,7 +13,7 @@ const formatCurrency = (value: number) => {
 };
 
 const AssetsPage: React.FC = () => {
-    const { accounts, updateAccount } = useFinance();
+    const { accounts, updateAccount, deleteAccount } = useFinance();
     const [isEditing, setIsEditing] = useState(false);
     const [editedValues, setEditedValues] = useState<Record<string, {name?: string, balance?: number}>>({});
 
@@ -75,6 +75,12 @@ const AssetsPage: React.FC = () => {
                 [field]: value
             }
         }));
+    };
+
+    const handleDeleteAccount = (accountId: string, accountName: string) => {
+        if (window.confirm(`Are you sure you want to delete the account "${accountName}"? All transactions from that account will be deleted too. This action cannot be undone.`)) {
+            deleteAccount({ accountId });
+        }
     };
 
     if (accounts.length === 0) {
@@ -158,32 +164,41 @@ const AssetsPage: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {accts.map(account => (
-                            <Card key={account.id} className="flex flex-col justify-between">
+                            <Card key={account.id} className="relative flex flex-col justify-between">
                                 {isEditing ? (
-                                    <div className="space-y-2">
-                                        <label className="text-xs text-text-secondary">Account Name</label>
-                                        <input
-                                            type="text"
-                                            value={editedValues[account.id]?.name ?? account.name}
-                                            onChange={(e) => handleValueChange(account.id, 'name', e.target.value)}
-                                            className="bg-primary border border-secondary rounded-md px-3 py-2 text-text-primary w-full focus:outline-none focus:ring-2 focus:ring-accent"
-                                        />
-                                        {(account.holdings && account.holdings.length > 0) ? (
-                                             <div>
-                                                <label className="text-xs text-text-secondary">Balance (from holdings)</label>
-                                                <p className="font-semibold text-2xl mt-1">{formatCurrency(account.balance)}</p>
-                                             </div>
-                                        ) : (
-                                            <div>
-                                                <label className="text-xs text-text-secondary">Balance</label>
-                                                <input
-                                                    type="number"
-                                                    value={editedValues[account.id]?.balance ?? account.balance}
-                                                    onChange={(e) => handleValueChange(account.id, 'balance', parseFloat(e.target.value) || 0)}
-                                                    className="bg-primary border border-secondary rounded-md px-3 py-2 text-text-primary w-full focus:outline-none focus:ring-2 focus:ring-accent"
-                                                />
-                                            </div>
-                                        )}
+                                    <div>
+                                        <button
+                                            onClick={() => handleDeleteAccount(account.id, account.name)}
+                                            className="absolute top-3 right-3 p-2 text-text-secondary hover:text-negative rounded-full hover:bg-negative/10 transition-colors"
+                                            aria-label={`Delete ${account.name}`}
+                                        >
+                                            <TrashIcon className="w-5 h-5" />
+                                        </button>
+                                        <div className="space-y-2 pr-8">
+                                            <label className="text-xs text-text-secondary">Account Name</label>
+                                            <input
+                                                type="text"
+                                                value={editedValues[account.id]?.name ?? account.name}
+                                                onChange={(e) => handleValueChange(account.id, 'name', e.target.value)}
+                                                className="bg-primary border border-secondary rounded-md px-3 py-2 text-text-primary w-full focus:outline-none focus:ring-2 focus:ring-accent"
+                                            />
+                                            {(account.holdings && account.holdings.length > 0) ? (
+                                                 <div>
+                                                    <label className="text-xs text-text-secondary">Balance (from holdings)</label>
+                                                    <p className="font-semibold text-2xl mt-1">{formatCurrency(account.balance)}</p>
+                                                 </div>
+                                            ) : (
+                                                <div>
+                                                    <label className="text-xs text-text-secondary">Balance</label>
+                                                    <input
+                                                        type="number"
+                                                        value={editedValues[account.id]?.balance ?? account.balance}
+                                                        onChange={(e) => handleValueChange(account.id, 'balance', parseFloat(e.target.value) || 0)}
+                                                        className="bg-primary border border-secondary rounded-md px-3 py-2 text-text-primary w-full focus:outline-none focus:ring-2 focus:ring-accent"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 ) : (
                                     <Link to={`/assets/${account.id}`} className="block hover:bg-primary/30 rounded-lg p-2 -m-2 transition-colors">

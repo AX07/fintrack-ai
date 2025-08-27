@@ -1,91 +1,63 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import type { Peer } from 'peerjs';
-import type { DataConnection } from 'peerjs';
+import React, { useState, useRef } from 'react';
 import QRCode from 'qrcode';
-import { Html5Qrcode } from 'html5-qrcode';
+import pako from 'pako';
 import Card from '../components/Card';
 import { useAuth } from '../hooks/useAuth';
 import { useFinance } from '../hooks/useFinance';
 import { useApiKey } from '../hooks/useApiKey';
 import { exportTransactionsToCSV, exportAccountsToCSV } from '../utils/export';
 import { DownloadIcon, TrashIcon, LogOutIcon, SyncIcon, SparklesIcon } from '../components/Icons';
-import { FinanceData } from '../types';
-
-// The data payload for syncing, which includes financial data and the API key
-interface SyncPayload extends FinanceData {
-    apiKey: string | null;
-}
-
-// Helper to deeply merge two FinanceData objects
-const mergeFinanceData = (hostData: FinanceData, clientData: FinanceData): FinanceData => {
-    const createMap = <T extends { id: string }>(arr: T[]): Map<string, T> => new Map(arr.map(item => [item.id, item]));
-
-    // Merge Transactions
-    const mergedTransactionsMap = createMap(hostData.transactions);
-    clientData.transactions.forEach(tx => {
-        if (!mergedTransactionsMap.has(tx.id)) mergedTransactionsMap.set(tx.id, tx);
-    });
-
-    // Merge Accounts (with holding merge)
-    const mergedAccountsMap = createMap(hostData.accounts);
-    clientData.accounts.forEach(clientAcc => {
-        if (!mergedAccountsMap.has(clientAcc.id)) {
-            mergedAccountsMap.set(clientAcc.id, clientAcc);
-        } else {
-            const hostAcc = mergedAccountsMap.get(clientAcc.id)!;
-            const mergedHoldingsMap = createMap(hostAcc.holdings || []);
-            (clientAcc.holdings || []).forEach(clientHolding => {
-                if (!mergedHoldingsMap.has(clientHolding.id)) mergedHoldingsMap.set(clientHolding.id, clientHolding);
-            });
-            const mergedAccount = { ...hostAcc, holdings: Array.from(mergedHoldingsMap.values()) };
-            mergedAccount.balance = mergedAccount.holdings.reduce((sum, h) => sum + h.value, 0);
-            mergedAccountsMap.set(hostAcc.id, mergedAccount);
-        }
-    });
-
-    // Merge Conversation History
-    const mergedConversationMap = createMap(hostData.conversationHistory);
-    clientData.conversationHistory.forEach(conv => {
-        if (!mergedConversationMap.has(conv.id)) mergedConversationMap.set(conv.id, conv);
-    });
-
-    return {
-        transactions: Array.from(mergedTransactionsMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-        accounts: Array.from(mergedAccountsMap.values()),
-        conversationHistory: Array.from(mergedConversationMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
-        lastUpdated: new Date().toISOString(),
-    };
-};
+import { FinanceData, SyncPayload } from '../types';
 
 
 const ProfilePage: React.FC = () => {
     const { user, logout } = useAuth();
-    const { transactions, accounts, conversationHistory, lastUpdated, clearAllData, setData } = useFinance();
+    const { transactions, accounts, conversationHistory, lastUpdated, clearAllData } = useFinance();
     const { apiKey, saveApiKey, removeApiKey } = useApiKey();
     const [keyInput, setKeyInput] = useState('');
-
-    // --- State and Refs for Device Sync ---
-    const [mode, setMode] = useState<'select' | 'host' | 'scan'>('select');
-    const [peerId, setPeerId] = useState<string | null>(null);
-    const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
-    const [log, setLog] = useState<string[]>([]);
-    const peerRef = useRef<Peer | null>(null);
-    const connRef = useRef<DataConnection | null>(null);
+    
+    // --- State for New Device Setup ---
+    const [showQr, setShowQr] = useState(false);
     const qrCanvasRef = useRef<HTMLCanvasElement>(null);
-    const scannerRef = useRef<Html5Qrcode | null>(null);
 
-    // This object contains all data, including the API key, for sync.
-    const currentSyncPayload: SyncPayload = {
-        transactions,
-        accounts,
-        conversationHistory,
-        lastUpdated,
-        apiKey,
+    const handleGenerateQrCode = () => {
+        if (!user || !qrCanvasRef.current) return;
+
+        const financeData: FinanceData = { transactions, accounts, conversationHistory, lastUpdated };
+        const payload: SyncPayload = {
+            user,
+            financeData,
+            apiKey: apiKey || '',
+        };
+
+        try {
+            const jsonString = JSON.stringify(payload);
+            const compressedData = pako.deflate(jsonString);
+            
+            // Convert Uint8Array to a binary string for btoa
+            let compressedBinaryStr = '';
+            const len = compressedData.length;
+            for (let i = 0; i < len; i++) {
+                compressedBinaryStr += String.fromCharCode(compressedData[i]);
+            }
+            const base64String = btoa(compressedBinaryStr);
+
+            // Add a version prefix for format detection and backward compatibility
+            const finalPayload = `FINT_C_V1:${base64String}`;
+            
+            QRCode.toCanvas(qrCanvasRef.current, finalPayload, { width: 256, errorCorrectionLevel: 'L' })
+                .then(() => setShowQr(true))
+                .catch(err => {
+                    console.error('QR code generation failed:', err);
+                    alert('Error: Could not generate QR code. The data might be too large.');
+                });
+        } catch (error) {
+            console.error('Data compression/encoding failed:', error);
+            alert('Error: Could not prepare data for QR code. Your profile might be too large.');
+        }
     };
 
-    const addLog = (message: string) => setLog(prev => [message, ...prev.slice(0, 99)]);
-    
     // --- Handlers for API Key ---
     const handleSaveKey = () => {
         if (keyInput.trim()) {
@@ -106,191 +78,7 @@ const ProfilePage: React.FC = () => {
         if (window.confirm("Are you sure you want to delete all your financial data AND your saved API key? This action cannot be undone.")) {
             clearAllData();
             removeApiKey();
-        }
-    };
-
-    // --- Effects for Device Sync ---
-
-    // Effect to initialize PeerJS when a mode is selected
-    useEffect(() => {
-        if (mode === 'select' || peerRef.current) return;
-
-        import('peerjs').then(({ default: Peer }) => {
-            if (peerRef.current) return;
-
-            addLog("Initializing connection broker...");
-            const peer = new Peer();
-            peerRef.current = peer;
-
-            peer.on('open', (id) => {
-                setPeerId(id);
-                addLog(`Device ready with ID: ${id}`);
-            });
-
-            peer.on('connection', (conn) => {
-                addLog(`Incoming connection from ${conn.peer}`);
-                setConnectionStatus('connecting');
-                connRef.current = conn;
-                setupConnectionListeners(conn);
-            });
-            
-            peer.on('error', (err) => {
-                console.error("PeerJS error:", err);
-                addLog(`Error: ${err.type} - ${err.message}`);
-                setConnectionStatus('error');
-            });
-        });
-
-        return () => {
-            if (scannerRef.current) {
-                try {
-                    if (scannerRef.current.getState() !== 1) { // 1 is NOT_STARTED
-                         scannerRef.current.clear();
-                    }
-                } catch (e) { console.error("Error clearing scanner", e) }
-            }
-            if (peerRef.current) {
-                peerRef.current.destroy();
-                peerRef.current = null;
-            }
-        };
-    }, [mode]);
-
-    // Effect to generate QR code once peerId is available
-    useEffect(() => {
-        if (mode === 'host' && peerId && qrCanvasRef.current) {
-            QRCode.toCanvas(qrCanvasRef.current, peerId, { width: 256, errorCorrectionLevel: 'H' })
-            .catch(err => {
-                console.error('QR code generation failed:', err);
-                addLog('Error: Could not generate QR code.');
-            });
-        }
-    }, [peerId, mode]);
-    
-    // Effect to start camera scanner
-    useEffect(() => {
-        if (mode === 'scan' && peerId) {
-            const scanner = new Html5Qrcode('qr-reader');
-            scannerRef.current = scanner;
-            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-            
-            scanner.start({ facingMode: "environment" }, config, (decodedText) => {
-                scanner.stop();
-                addLog(`QR Code detected. Connecting to host: ${decodedText}`);
-                setConnectionStatus('connecting');
-                const conn = peerRef.current?.connect(decodedText);
-                if(conn) {
-                    connRef.current = conn;
-                    setupConnectionListeners(conn);
-                }
-            }, (errorMessage) => {} /* ignore errors */)
-            .catch(err => addLog(`Camera error: ${err}`));
-        }
-    }, [mode, peerId]);
-
-    const setupConnectionListeners = (conn: DataConnection) => {
-        conn.on('open', () => {
-            setConnectionStatus('connected');
-            addLog('Connection established.');
-            // The device that scanned the QR code ('client') sends its data first to initiate the sync.
-            if (mode === 'scan') {
-                addLog("Sending this device's data to the host...");
-                conn.send(currentSyncPayload);
-            }
-        });
-    
-        conn.on('data', (receivedData: any) => {
-            const remotePayload = receivedData as SyncPayload;
-            
-            if (mode === 'host') {
-                // HOST: Receives client data, merges everything, and sends the final version back.
-                addLog("Received data from peer. Merging as the host...");
-                
-                const hostPayload = currentSyncPayload; // This device's data
-                const finalFinanceData = mergeFinanceData(hostPayload, remotePayload);
-                
-                // API Key Logic: Host's key takes priority.
-                const finalApiKey = hostPayload.apiKey || remotePayload.apiKey;
-    
-                // Update the host device's state with the merged result.
-                setData(finalFinanceData);
-                if (finalApiKey && !hostPayload.apiKey) {
-                    saveApiKey(finalApiKey); // Save if host didn't have one but client did
-                }
-    
-                const finalPayload: SyncPayload = {
-                    ...finalFinanceData,
-                    apiKey: finalApiKey,
-                };
-    
-                addLog("Merge complete. Sending final data back to peer.");
-                conn.send(finalPayload);
-                setTimeout(() => conn.close(), 1000); // Close connection after sending final data
-            } else {
-                // CLIENT: Receives the final merged data from the host and applies it.
-                addLog("Received final merged data from host. Applying updates...");
-                
-                const finalFinanceData: FinanceData = {
-                    transactions: remotePayload.transactions,
-                    accounts: remotePayload.accounts,
-                    conversationHistory: remotePayload.conversationHistory,
-                    lastUpdated: remotePayload.lastUpdated,
-                };
-                setData(finalFinanceData);
-                
-                if (remotePayload.apiKey) {
-                    saveApiKey(remotePayload.apiKey);
-                    addLog("API Key has been synced from the host device.");
-                }
-                
-                addLog("Sync complete! This device is now up-to-date.");
-                conn.close(); // Client closes connection upon receiving final data.
-            }
-        });
-    
-        conn.on('close', () => {
-            setConnectionStatus('disconnected');
-            addLog("Connection closed.");
-            connRef.current = null;
-        });
-    };
-
-    const renderSyncContent = () => {
-        if (mode === 'select') {
-            return (
-                <div className="flex flex-col md:flex-row gap-6">
-                    <button onClick={() => setMode('host')} className="flex-1 p-6 bg-secondary hover:bg-primary rounded-lg text-center transition-colors">
-                        <h3 className="text-xl font-semibold">Host Session</h3>
-                        <p className="text-text-secondary mt-2">Display a QR code on this device for another device to scan.</p>
-                    </button>
-                    <button onClick={() => setMode('scan')} className="flex-1 p-6 bg-secondary hover:bg-primary rounded-lg text-center transition-colors">
-                        <h3 className="text-xl font-semibold">Scan QR Code</h3>
-                        <p className="text-text-secondary mt-2">Use this device's camera to scan a code from another device.</p>
-                    </button>
-                </div>
-            );
-        }
-
-        if (mode === 'host') {
-            return (
-                <div className="text-center">
-                    <h2 className="text-xl font-semibold mb-2">Scan this QR Code</h2>
-                    <p className="text-text-secondary mb-4">Open this page on your other device and choose "Scan QR Code".</p>
-                    <div className="bg-white p-4 rounded-lg inline-block mx-auto">
-                        {!peerId ? <div className="w-64 h-64 flex items-center justify-center text-black">Initializing...</div> : <canvas ref={qrCanvasRef}></canvas>}
-                    </div>
-                </div>
-            );
-        }
-        
-        if (mode === 'scan') {
-            return (
-                <div className="text-center">
-                    <h2 className="text-xl font-semibold mb-2">Scan QR Code</h2>
-                     <p className="text-text-secondary mb-4">Point your camera at the QR code on your other device.</p>
-                    <div id="qr-reader" className="w-full max-w-sm mx-auto rounded-lg overflow-hidden border-2 border-secondary"></div>
-                </div>
-            );
+            logout(); // Log out after clearing data to prevent issues
         }
     };
     
@@ -308,7 +96,6 @@ const ProfilePage: React.FC = () => {
                     <img className="h-20 w-20 rounded-full" src={user.avatar} alt="User Avatar" />
                     <div>
                         <h2 className="text-2xl font-bold">{user.name}</h2>
-                        <p className="text-text-secondary">{user.email}</p>
                     </div>
                 </div>
             </Card>
@@ -355,22 +142,29 @@ const ProfilePage: React.FC = () => {
             <Card>
                 <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
                     <SyncIcon className="w-5 h-5 text-text-secondary"/>
-                    Device Sync
+                    New Device Setup
                 </h2>
-                {mode !== 'select' && (
-                     <button onClick={() => setMode('select')} className="text-sm text-accent mb-4">← Back to selection</button>
+                {showQr ? (
+                     <div className="text-center">
+                        <p className="text-text-secondary mb-4">On your new device, choose "Sign in with QR Code" and scan the image below.</p>
+                        <div className="bg-white p-4 rounded-lg inline-block mx-auto">
+                            <canvas ref={qrCanvasRef}></canvas>
+                        </div>
+                        <button onClick={() => setShowQr(false)} className="mt-4 bg-secondary hover:bg-primary text-text-primary font-semibold py-2 px-4 rounded-lg transition-colors">
+                            Done
+                        </button>
+                     </div>
+                ) : (
+                    <div>
+                        <p className="text-text-secondary mb-4">
+                            Click the button below to generate a QR code. Scanning this code on the login screen of a new device will securely clone your entire profile, including all data and your API key.
+                        </p>
+                        <button onClick={handleGenerateQrCode} className="w-full bg-accent text-white font-semibold py-2.5 rounded-lg hover:opacity-90 transition-opacity">
+                            Generate QR Code
+                        </button>
+                        <canvas ref={qrCanvasRef} style={{ display: 'none' }}></canvas>
+                    </div>
                 )}
-                {renderSyncContent()}
-                
-                <h3 className="text-lg font-semibold mt-6 mb-3 flex items-center gap-2">
-                    Sync Status & Log
-                </h3>
-                <div className="p-4 bg-primary rounded-lg h-32 overflow-y-auto flex flex-col-reverse">
-                    <ul className="text-sm font-mono space-y-1 text-text-secondary">
-                        {log.map((entry, index) => <li key={index}>{entry}</li>)}
-                         <li>Status: <span className={`font-bold ${connectionStatus === 'connected' ? 'text-positive-text' : connectionStatus === 'error' ? 'text-negative-text' : ''}`}>{connectionStatus.toUpperCase()}</span></li>
-                    </ul>
-                </div>
             </Card>
 
             <Card>

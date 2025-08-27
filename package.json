@@ -16,7 +16,8 @@
     "@google/genai": "^1.8.0",
     "peerjs": "^1.5.4",
     "qrcode": "^1.5.3",
-    "html5-qrcode": "^2.3.8"
+    "html5-qrcode": "^2.3.8",
+    "pako": "^2.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

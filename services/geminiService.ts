@@ -125,7 +125,7 @@ export const parseFileWithAI = async (file: File, prompt: string): Promise<{ tra
         });
     };
 
-    const userPrompt = `You are an expert financial data parser. Your task is to analyze the provided financial statement (CSV, PDF, or image) and extract both the transactions and the single account they belong to.
+    const userPrompt = `You are a highly specialized financial data extraction AI. Your task is to analyze the provided financial document (CSV, PDF, or image) and extract transactions and the account they belong to.
 
 Your response MUST be a single JSON object containing 'transactions' and 'accounts' arrays.
 
@@ -136,14 +136,14 @@ Your response MUST be a single JSON object containing 'transactions' and 'accoun
     -   You **MUST** create one (and only one) 'Account' object in the \`accounts\` array.
     -   **Name**: Infer a descriptive name for the account (e.g., "Chase Checking", "Amex Gold Card"). Use the user's prompt for hints if available.
     -   **Category**: For transaction statements, this will almost always be 'Bank Accounts'.
-    -   **Balance**: Look for a 'closing balance', 'ending balance', or 'current balance' in the file. This is the most important value. If you absolutely cannot find one, calculate the balance by summing up all the transactions in the file.
+    -   **Balance**: Look for a 'closing balance', 'ending balance', or 'current balance'. If you cannot find one, calculate it by summing all transactions.
     -   **Institution**: Identify the financial institution (e.g., 'Chase', 'American Express').
 3.  **Transaction Extraction**:
     -   Extract all individual financial events into the \`transactions\` array.
     -   Use negative amounts for expenses and positive for income.
-    -   Categorize each transaction appropriately from this list: ${transactionCategories.join(', ')}.
+    -   **Categorization**: Categorize each transaction with high precision from this list: ${transactionCategories.join(', ')}. Aggressively avoid using 'Other'. Only use 'Other' as an absolute last resort if no other category is a reasonable fit.
 4.  **Linking**:
-    -   This is **ESSENTIAL**: For every single transaction you extract, you **MUST** set its \`accountName\` field to be the exact same name as the account you created in the \`accounts\` array. This links the transactions to their account.
+    -   **ESSENTIAL**: For every single transaction you extract, you **MUST** set its \`accountName\` field to be the exact same name as the account you created in the \`accounts\` array. This links the transactions to their account.
 
 **User Context/Hints**: ${prompt || 'No specific instructions. Please infer account name from the file content.'}
 **Date Context**: Today is ${new Date().toISOString().split('T')[0]}.

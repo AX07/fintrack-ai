@@ -73,7 +73,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                       <img className="h-10 w-10 rounded-full group-hover:ring-2 group-hover:ring-accent transition-all" src={user?.avatar} alt="User" />
                       <div>
                           <p className="text-sm font-semibold text-text-primary">{user?.name}</p>
-                          <p className="text-xs text-text-secondary">{user?.email}</p>
                       </div>
                   </Link>
                   <button 

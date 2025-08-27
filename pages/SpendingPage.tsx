@@ -1,10 +1,10 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import Card from '../components/Card';
 import { useFinance } from '../hooks/useFinance';
-import { Transaction, transactionCategories } from '../types';
-import { PencilIcon } from '../components/Icons';
+import { Transaction, transactionCategories, TransactionCategory } from '../types';
+import { PencilIcon, TrashIcon, XIcon } from '../components/Icons';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-US', {
@@ -18,10 +18,18 @@ const CategoryPill: React.FC<{ category: string }> = ({ category }) => (
 );
 
 const SpendingPage: React.FC = () => {
-    const { transactions, accounts, updateTransaction } = useFinance();
+    const { transactions, accounts, updateTransaction, deleteTransaction, updateTransactionsCategory } = useFinance();
     const [activeTab, setActiveTab] = useState('All');
     const [isEditing, setIsEditing] = useState(false);
     const [editedTransactions, setEditedTransactions] = useState<Record<string, Partial<Transaction>>>({});
+    const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+    const transactionsCardRef = useRef<HTMLDivElement>(null);
+    const [updateModal, setUpdateModal] = useState<{
+        isOpen: boolean;
+        originalTransaction: Transaction;
+        newCategory: TransactionCategory;
+        similarTransactions: Transaction[];
+    } | null>(null);
 
     const bankAccounts = useMemo(() => 
         accounts.filter(acc => acc.category === 'Bank Accounts'), 
@@ -52,11 +60,24 @@ const SpendingPage: React.FC = () => {
 
     const displayedTransactions = useMemo(() => {
         return transactions
-            .filter(t => activeTab === 'All' || t.accountName === activeTab)
+            .filter(t => {
+                if (categoryFilter && t.category !== categoryFilter) {
+                    return false;
+                }
+                if (activeTab === 'All' || t.accountName === activeTab) {
+                    return true;
+                }
+                return false;
+            })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [transactions, activeTab]);
+    }, [transactions, activeTab, categoryFilter]);
 
     const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#ca8a04', '#65a30d'];
+
+    const handleCategoryClick = (categoryName: string) => {
+        setCategoryFilter(categoryName);
+        transactionsCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
 
     const handleEditToggle = () => {
         if (isEditing) {
@@ -71,17 +92,92 @@ const SpendingPage: React.FC = () => {
     };
 
     const handleTransactionChange = (id: string, field: keyof Transaction, value: any) => {
-        setEditedTransactions(prev => ({
-            ...prev,
-            [id]: {
-                ...prev[id],
-                [field]: value,
+        if (isEditing && field === 'category') {
+            const originalTransaction = transactions.find(t => t.id === id);
+            if (!originalTransaction) return;
+
+            const newCategory = value as TransactionCategory;
+            const similarTransactions = transactions.filter(t => t.id !== id && t.description.toLowerCase() === originalTransaction.description.toLowerCase());
+            
+            if (similarTransactions.length > 0 && originalTransaction.category !== newCategory) {
+                setUpdateModal({
+                    isOpen: true,
+                    originalTransaction,
+                    newCategory,
+                    similarTransactions
+                });
+                setEditedTransactions(prev => ({ ...prev, [id]: { ...prev[id], category: newCategory } }));
+                return; 
             }
-        }));
+        }
+        setEditedTransactions(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+    };
+
+    const handleDeleteTransaction = (transactionId: string) => {
+        deleteTransaction({ transactionId });
+    };
+
+    const handleModalConfirm = (updateAll: boolean) => {
+        if (!updateModal) return;
+        const { originalTransaction, newCategory, similarTransactions } = updateModal;
+
+        if (updateAll) {
+            const idsToUpdate = [originalTransaction.id, ...similarTransactions.map(t => t.id)];
+            updateTransactionsCategory({ ids: idsToUpdate, category: newCategory });
+        } else {
+            updateTransaction({ id: originalTransaction.id, category: newCategory });
+        }
+        
+        setEditedTransactions(prev => {
+            const newEdited = { ...prev };
+            if (newEdited[originalTransaction.id]) {
+                delete newEdited[originalTransaction.id].category;
+            }
+            return newEdited;
+        });
+        
+        setUpdateModal(null);
+    };
+
+    const handleModalCancel = () => {
+        if (!updateModal) return;
+        setEditedTransactions(prev => {
+            const newEdited = { ...prev };
+            if (newEdited[updateModal.originalTransaction.id]) {
+                newEdited[updateModal.originalTransaction.id].category = updateModal.originalTransaction.category;
+            }
+            return newEdited;
+        });
+        setUpdateModal(null);
     };
 
   return (
     <div className="space-y-6">
+      {updateModal?.isOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" aria-modal="true" role="dialog">
+            <Card className="max-w-md w-full">
+                <h2 className="text-xl font-bold mb-2">Update Category</h2>
+                <p className="text-text-secondary mb-4">
+                    Found {updateModal.similarTransactions.length} other transaction(s) with the description "{updateModal.originalTransaction.description}".
+                </p>
+                <p className="text-text-secondary mb-6">
+                    Do you want to update the category for all of them from '{updateModal.originalTransaction.category}' to '{updateModal.newCategory}'?
+                </p>
+                <div className="flex justify-end gap-3">
+                    <button onClick={handleModalCancel} className="bg-transparent hover:bg-primary text-text-secondary font-semibold py-2 px-4 rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button onClick={() => handleModalConfirm(false)} className="bg-secondary hover:bg-primary text-text-primary font-semibold py-2 px-4 rounded-lg transition-colors">
+                        Just This One
+                    </button>
+                    <button onClick={() => handleModalConfirm(true)} className="bg-accent hover:opacity-90 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                        Update All ({updateModal.similarTransactions.length + 1})
+                    </button>
+                </div>
+            </Card>
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">Spending</h1>
         <p className="text-text-secondary">Track and analyze your spending habits.</p>
@@ -101,7 +197,7 @@ const SpendingPage: React.FC = () => {
                             <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
                             <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value)/1000}k`}/>
                             <Tooltip cursor={{fill: 'rgba(107, 114, 128, 0.1)'}} contentStyle={{ backgroundColor: '#1e1e1e', border: '1px solid #3a3a3a', borderRadius: '0.5rem' }} formatter={(value) => formatCurrency(Number(value))}/>
-                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                            <Bar dataKey="value" radius={[4, 4, 0, 0]} className="cursor-pointer" onClick={(data) => handleCategoryClick(data.name)}>
                                 {spendingChartData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
@@ -130,7 +226,7 @@ const SpendingPage: React.FC = () => {
                 </thead>
                 <tbody>
                     {spendingChartData.length > 0 ? spendingChartData.map((item) => (
-                        <tr key={item.name} className="border-b border-primary hover:bg-primary transition-colors last:border-b-0">
+                        <tr key={item.name} onClick={() => handleCategoryClick(item.name)} className="cursor-pointer border-b border-primary hover:bg-primary transition-colors last:border-b-0">
                             <td className="p-4 font-medium">{item.name}</td>
                             <td className="p-4 text-right font-semibold">{formatCurrency(item.value)}</td>
                             <td className="p-4 text-right">{item.count}</td>
@@ -145,9 +241,20 @@ const SpendingPage: React.FC = () => {
         </div>
       </Card>
 
-      <Card>
+      <Card ref={transactionsCardRef}>
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-4 sm:gap-0">
-            <h2 className="text-xl font-semibold">Transactions</h2>
+            <h2 className="text-xl font-semibold">
+                Transactions
+                {categoryFilter && (
+                    <span className="ml-3 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-secondary text-text-secondary">
+                        {categoryFilter}
+                        <button onClick={() => setCategoryFilter(null)} className="flex-shrink-0 ml-1.5 h-4 w-4 rounded-full inline-flex items-center justify-center text-text-secondary hover:bg-primary hover:text-text-primary">
+                            <span className="sr-only">Remove filter</span>
+                            <XIcon className="h-3 w-3" />
+                        </button>
+                    </span>
+                )}
+            </h2>
             <button
                 onClick={handleEditToggle}
                 className="flex items-center justify-center gap-2 bg-secondary hover:bg-primary text-text-primary font-semibold py-2 px-4 rounded-lg transition-colors"
@@ -182,6 +289,7 @@ const SpendingPage: React.FC = () => {
                         <th className="p-4 font-normal">Description</th>
                         <th className="p-4 font-normal">Category</th>
                         <th className="p-4 font-normal text-right">Amount</th>
+                        {isEditing && <th className="p-4 font-normal text-center">Actions</th>}
                     </tr>
                 </thead>
                 <tbody>
@@ -223,6 +331,15 @@ const SpendingPage: React.FC = () => {
                                             className="bg-primary border border-secondary rounded-md px-2 py-1 text-text-primary w-full text-right focus:outline-none focus:ring-1 focus:ring-accent"
                                         />
                                     </td>
+                                    <td className="p-2 text-center">
+                                        <button 
+                                            onClick={() => handleDeleteTransaction(t.id)}
+                                            className="p-2 text-text-secondary hover:text-negative transition-colors rounded-full hover:bg-negative/10"
+                                            aria-label={`Delete transaction: ${t.description}`}
+                                        >
+                                            <TrashIcon className="w-5 h-5" />
+                                        </button>
+                                    </td>
                                 </>
                             ) : (
                                 <>
@@ -239,7 +356,7 @@ const SpendingPage: React.FC = () => {
                         </tr>
                     )) : (
                         <tr>
-                            <td colSpan={4} className="text-center p-8 text-text-secondary">No transactions found.</td>
+                            <td colSpan={isEditing ? 5 : 4} className="text-center p-8 text-text-secondary">No transactions found.</td>
                         </tr>
                     )}
                 </tbody>

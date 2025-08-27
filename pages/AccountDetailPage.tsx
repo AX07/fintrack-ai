@@ -30,12 +30,16 @@ const AccountDetailPage: React.FC = () => {
 
     const handleHoldingChange = (holdingId: string, field: keyof Holding, value: string | number) => {
         if (!account) return;
-        const numericValue = typeof value === 'string' ? parseFloat(value) : value;
-        updateHolding({
-            accountId: account.id,
-            holdingId,
-            data: { [field]: field === 'name' || field === 'ticker' ? value : numericValue }
-        });
+        
+        if (field === 'quantity' || field === 'value') {
+            let numericValue = typeof value === 'string' ? parseFloat(value) : value;
+            if (isNaN(numericValue)) {
+                numericValue = 0; // Default to 0 if input is not a valid number
+            }
+            updateHolding({ accountId: account.id, holdingId, data: { [field]: numericValue } });
+        } else {
+            updateHolding({ accountId: account.id, holdingId, data: { [field]: value } });
+        }
     };
 
     const handleAddNewHolding = () => {
@@ -47,7 +51,7 @@ const AccountDetailPage: React.FC = () => {
     };
 
     const handleRemoveHolding = (holdingId: string) => {
-        if (!account || !window.confirm("Are you sure you want to remove this holding?")) return;
+        if (!account) return;
         removeHolding({ accountId: account.id, holdingId });
     };
 

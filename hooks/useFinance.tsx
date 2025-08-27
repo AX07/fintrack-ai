@@ -1,6 +1,5 @@
-
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
-import { Transaction, Account, FinanceData, Holding, Conversation } from '../types';
+import { Transaction, Account, FinanceData, Holding, Conversation, TransactionCategory } from '../types';
 import { useAuth } from './useAuth';
 
 // MOCK DATA for a clean slate
@@ -18,7 +17,10 @@ type Action =
     | { type: 'ADD_CONVERSATION'; payload: Conversation }
     | { type: 'RENAME_ACCOUNT'; payload: { oldName: string; newName: string } }
     | { type: 'UPDATE_TRANSACTION', payload: Partial<Transaction> & { id: string } }
+    | { type: 'UPDATE_TRANSACTIONS_CATEGORY', payload: { ids: string[]; category: TransactionCategory } }
+    | { type: 'DELETE_TRANSACTION', payload: { transactionId: string } }
     | { type: 'UPDATE_ACCOUNT', payload: { id: string, data: Partial<Omit<Account, 'id'>> } }
+    | { type: 'DELETE_ACCOUNT', payload: { accountId: string } }
     | { type: 'ADD_HOLDING', payload: { accountId: string, holding: Omit<Holding, 'id'> } }
     | { type: 'UPDATE_HOLDING', payload: { accountId: string, holdingId: string, data: Partial<Holding> } }
     | { type: 'REMOVE_HOLDING', payload: { accountId: string, holdingId: string } }
@@ -32,7 +34,10 @@ interface FinanceContextType extends FinanceData {
     addConversation: (conversation: Conversation) => void;
     renameAccount: (payload: { oldName: string; newName: string }) => void;
     updateTransaction: (transaction: Partial<Transaction> & { id: string }) => void;
+    updateTransactionsCategory: (payload: { ids: string[]; category: TransactionCategory }) => void;
+    deleteTransaction: (payload: { transactionId: string }) => void;
     updateAccount: (payload: { id: string, data: Partial<Omit<Account, 'id'>> }) => void;
+    deleteAccount: (payload: { accountId: string }) => void;
     addHolding: (payload: { accountId: string, holding: Omit<Holding, 'id'> }) => void;
     updateHolding: (payload: { accountId: string, holdingId: string, data: Partial<Holding> }) => void;
     removeHolding: (payload: { accountId: string, holdingId: string }) => void;
@@ -142,6 +147,25 @@ const financeReducer = (state: FinanceData, action: Action): FinanceData => {
                 ),
                 lastUpdated: new Date().toISOString(),
             };
+        
+        case 'UPDATE_TRANSACTIONS_CATEGORY': {
+            const { ids, category } = action.payload;
+            const idSet = new Set(ids);
+            return {
+                ...state,
+                transactions: state.transactions.map(t =>
+                    idSet.has(t.id) ? { ...t, category } : t
+                ),
+                lastUpdated: new Date().toISOString(),
+            };
+        }
+
+        case 'DELETE_TRANSACTION':
+            return {
+                ...state,
+                transactions: state.transactions.filter(t => t.id !== action.payload.transactionId),
+                lastUpdated: new Date().toISOString(),
+            };
 
         case 'UPDATE_ACCOUNT': {
             const { id, data } = action.payload;
@@ -168,6 +192,23 @@ const financeReducer = (state: FinanceData, action: Action): FinanceData => {
                 }
                 return account;
             });
+
+            return {
+                ...state,
+                accounts: updatedAccounts,
+                transactions: updatedTransactions,
+                lastUpdated: new Date().toISOString(),
+            };
+        }
+
+        case 'DELETE_ACCOUNT': {
+            const { accountId } = action.payload;
+            const accountToDelete = state.accounts.find(acc => acc.id === accountId);
+            if (!accountToDelete) return state;
+
+            const updatedAccounts = state.accounts.filter(acc => acc.id !== accountId);
+            // Also delete all transactions linked to this account by name
+            const updatedTransactions = state.transactions.filter(t => t.accountName !== accountToDelete.name);
 
             return {
                 ...state,
@@ -224,7 +265,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     const initializer = () => {
         if (!user) return initialData;
-        const LOCAL_STORAGE_KEY = `finTrackData_${user.email}`;
+        const LOCAL_STORAGE_KEY = `finTrackData_${user.id}`;
         try {
             const storedData = localStorage.getItem(LOCAL_STORAGE_KEY);
             if (storedData) {
@@ -244,7 +285,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     useEffect(() => {
         if (!user) return; // Don't save if no user is logged in
-        const LOCAL_STORAGE_KEY = `finTrackData_${user.email}`;
+        const LOCAL_STORAGE_KEY = `finTrackData_${user.id}`;
         try {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
         } catch (error) {
@@ -258,20 +299,23 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const addConversation = (conversation: Conversation) => dispatch({ type: 'ADD_CONVERSATION', payload: conversation });
     const renameAccount = (payload: { oldName: string; newName: string }) => dispatch({ type: 'RENAME_ACCOUNT', payload });
     const updateTransaction = (transaction: Partial<Transaction> & { id: string }) => dispatch({ type: 'UPDATE_TRANSACTION', payload: transaction });
+    const updateTransactionsCategory = (payload: { ids: string[]; category: TransactionCategory }) => dispatch({ type: 'UPDATE_TRANSACTIONS_CATEGORY', payload });
+    const deleteTransaction = (payload: { transactionId: string }) => dispatch({ type: 'DELETE_TRANSACTION', payload });
     const updateAccount = (payload: { id: string, data: Partial<Omit<Account, 'id'>> }) => dispatch({ type: 'UPDATE_ACCOUNT', payload });
+    const deleteAccount = (payload: { accountId: string }) => dispatch({ type: 'DELETE_ACCOUNT', payload });
     const addHolding = (payload: { accountId: string, holding: Omit<Holding, 'id'> }) => dispatch({ type: 'ADD_HOLDING', payload });
     const updateHolding = (payload: { accountId: string, holdingId: string, data: Partial<Holding> }) => dispatch({ type: 'UPDATE_HOLDING', payload });
     const removeHolding = (payload: { accountId: string, holdingId: string }) => dispatch({ type: 'REMOVE_HOLDING', payload });
     const setData = (data: FinanceData) => dispatch({ type: 'SET_DATA', payload: data });
     const clearAllData = () => {
         if (user) {
-            const LOCAL_STORAGE_KEY = `finTrackData_${user.email}`;
+            const LOCAL_STORAGE_KEY = `finTrackData_${user.id}`;
             localStorage.removeItem(LOCAL_STORAGE_KEY);
             dispatch({ type: 'CLEAR_DATA' });
         }
     };
 
-    const value = { ...state, addTransaction, addMultipleTransactions, addAccounts, addConversation, renameAccount, updateTransaction, updateAccount, addHolding, updateHolding, removeHolding, setData, clearAllData };
+    const value = { ...state, addTransaction, addMultipleTransactions, addAccounts, addConversation, renameAccount, updateTransaction, updateTransactionsCategory, deleteTransaction, updateAccount, deleteAccount, addHolding, updateHolding, removeHolding, setData, clearAllData };
 
     return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
 };
