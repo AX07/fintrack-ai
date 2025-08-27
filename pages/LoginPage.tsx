@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { useFinance } from '../hooks/useFinance';
 import { useApiKey } from '../hooks/useApiKey';
 import Card from '../components/Card';
 import { LogoIcon, SparklesIcon } from '../components/Icons';
@@ -74,7 +73,6 @@ const LoginPage: React.FC = () => {
     
     const { createUserAndLogin, login, isAuthenticated } = useAuth();
     const { saveApiKey } = useApiKey();
-    const { setData } = useFinance();
     const navigate = useNavigate();
 
     const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -91,8 +89,7 @@ const LoginPage: React.FC = () => {
 
     const processPayload = useCallback((payload: any) => {
         if (payload && payload.user && payload.financeData && 'apiKey' in payload) {
-            login(payload.user);
-            setData(payload.financeData);
+            login(payload.user, payload.financeData);
             if (payload.apiKey) {
                 saveApiKey(payload.apiKey);
             }
@@ -102,7 +99,7 @@ const LoginPage: React.FC = () => {
             console.error("QR Scan Parse Error:", errorMessage, "Payload:", payload);
             setScanError(errorMessage);
         }
-    }, [login, setData, saveApiKey, navigate]);
+    }, [login, saveApiKey, navigate]);
     
     // This effect runs when all QR chunks are collected
     useEffect(() => {

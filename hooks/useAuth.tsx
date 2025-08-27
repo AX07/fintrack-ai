@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User } from '../types';
+import { User, FinanceData } from '../types';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
   createUserAndLogin: (name: string) => void;
-  login: (user: User) => void; // For QR code sign-in
+  login: (user: User, financeData?: FinanceData) => void; // For QR code sign-in
   logout: () => void;
 }
 
@@ -67,7 +67,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     navigate('/dashboard');
   };
   
-  const login = (userToLogin: User) => {
+  const login = (userToLogin: User, financeData?: FinanceData) => {
+    // Save finance data FIRST, before triggering re-renders with setUser
+    if (financeData) {
+        const financeDataKey = `finTrackData_${userToLogin.id}`;
+        try {
+            localStorage.setItem(financeDataKey, JSON.stringify(financeData));
+        } catch (error) {
+            console.error("Failed to save finance data during login", error);
+        }
+    }
+
     const users = getUsersFromStorage();
     users[userToLogin.id] = userToLogin; // Add or update user from QR
     localStorage.setItem(USERS_DB_STORAGE_KEY, JSON.stringify(users));
