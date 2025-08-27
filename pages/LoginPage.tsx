@@ -1,208 +1,59 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { useApiKey } from '../hooks/useApiKey';
+// FIX: Removed useApiKey as it is no longer needed.
+// import { useApiKey } from '../hooks/useApiKey';
 import Card from '../components/Card';
 import { LogoIcon, SparklesIcon } from '../components/Icons';
 import { Html5Qrcode } from 'html5-qrcode';
-import { SyncPayload, FinanceData } from '../types';
-import pako from 'pako';
-
-const fromV2Format = (compactData: any): SyncPayload | null => {
-    try {
-        const transactions = compactData.d.t.map((t: any[]) => ({
-            id: t[0],
-            date: t[1],
-            description: t[2],
-            amount: t[3],
-            category: t[4],
-            accountName: t[5] || undefined,
-        }));
-
-        const accounts = compactData.d.a.map((a: any[]) => {
-            const holdings = a[5].map((h: any[]) => ({
-                id: h[0],
-                name: h[1],
-                ticker: h[2] || undefined,
-                quantity: h[3],
-                value: h[4],
-            }));
-            return {
-                id: a[0],
-                name: a[1],
-                category: a[2],
-                institution: a[3] || undefined,
-                balance: a[4],
-                holdings: holdings.length > 0 ? holdings : undefined,
-            };
-        });
-
-        const financeData: FinanceData = {
-            transactions,
-            accounts,
-            transactionCategories: compactData.d.tc,
-            lastUpdated: compactData.d.lu,
-            conversationHistory: [],
-        };
-
-        return {
-            user: compactData.u,
-            financeData: financeData,
-            apiKey: compactData.k,
-        };
-    } catch (error) {
-        console.error("Failed to parse V2 compact data format", error);
-        return null;
-    }
-};
-
-interface ScanProgress {
-    sessionId: string | null;
-    total: number;
-    collected: number;
-    chunks: { [key: number]: string };
-}
 
 const LoginPage: React.FC = () => {
     const [name, setName] = useState('');
-    const [apiKeyInput, setApiKeyInput] = useState('');
+    // FIX: Removed state for API key input.
+    // const [apiKeyInput, setApiKeyInput] = useState('');
     const [mode, setMode] = useState<'create' | 'scan'>('create');
     const [scanError, setScanError] = useState<string | null>(null);
-    const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
-    const [scanFeedback, setScanFeedback] = useState(false); // For visual feedback on scan
     
-    const { createUserAndLogin, login, isAuthenticated } = useAuth();
-    const { saveApiKey } = useApiKey();
-    const navigate = useNavigate();
+    const { createUserAndLogin, isAuthenticated } = useAuth();
+    // FIX: Removed useApiKey hook.
+    // const { saveApiKey } = useApiKey();
 
     const scannerRef = useRef<Html5Qrcode | null>(null);
-    const scanTimeoutRef = useRef<number | null>(null);
-
-    const resetScanState = useCallback(() => {
-        setScanProgress(null);
-        setScanError(null);
-        if (scanTimeoutRef.current) {
-            clearTimeout(scanTimeoutRef.current);
-            scanTimeoutRef.current = null;
-        }
-    }, []);
-
-    const processPayload = useCallback((payload: any) => {
-        if (payload && payload.user && payload.financeData && 'apiKey' in payload) {
-            login(payload.user, payload.financeData);
-            if (payload.apiKey) {
-                saveApiKey(payload.apiKey);
-            }
-            navigate('/dashboard');
-        } else {
-            let errorMessage = "Could not read the QR code. It may be invalid or from an unsupported version. Please generate a new code from an up-to-date device and try again.";
-            console.error("QR Scan Parse Error:", errorMessage, "Payload:", payload);
-            setScanError(errorMessage);
-        }
-    }, [login, saveApiKey, navigate]);
-    
-    // This effect runs when all QR chunks are collected
-    useEffect(() => {
-        if (scanProgress && scanProgress.total > 0 && scanProgress.collected === scanProgress.total) {
-            const processData = async () => {
-                if (scannerRef.current?.isScanning) {
-                    await scannerRef.current.stop();
-                }
-
-                let reassembledData = '';
-                for (let i = 1; i <= scanProgress.total; i++) {
-                    reassembledData += scanProgress.chunks[i] || '';
-                }
-                
-                resetScanState(); // Clear progress for next potential scan
-
-                let payload: SyncPayload | null = null;
-                if (reassembledData.startsWith('FINT_V2:')) {
-                    try {
-                        const base64String = reassembledData.substring('FINT_V2:'.length);
-                        const compressedBinaryStr = atob(base64String);
-                        const compressedData = Uint8Array.from(compressedBinaryStr, c => c.charCodeAt(0));
-                        const jsonString = pako.inflate(compressedData, { to: 'string' });
-                        payload = fromV2Format(JSON.parse(jsonString));
-                    } catch (e) { console.error("Failed to parse V2 QR code", e); }
-                } else if (reassembledData.startsWith('FINT_C_V1:')) {
-                    try {
-                        const base64String = reassembledData.substring('FINT_C_V1:'.length);
-                        const compressedBinaryStr = atob(base64String);
-                        const compressedData = Uint8Array.from(compressedBinaryStr, c => c.charCodeAt(0));
-                        const jsonString = pako.inflate(compressedData, { to: 'string' });
-                        payload = JSON.parse(jsonString);
-                    } catch (e) { console.error("Failed to parse V1 QR code", e); }
-                } else {
-                    try {
-                        payload = JSON.parse(reassembledData);
-                    } catch (e) { /* Not JSON */ }
-                }
-                processPayload(payload);
-            };
-
-            processData();
-        }
-    }, [scanProgress, processPayload, resetScanState]);
 
     const onScanSuccess = useCallback((decodedText: string) => {
-        if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-        const trimmedText = decodedText.trim();
-        
-        // Handle multi-part QR codes
-        if (trimmedText.startsWith('FINT_M_V1:')) {
-            const parts = trimmedText.split(':');
-            if (parts.length < 5) return;
-            
-            const [, sessionId, indexStr, totalStr, ...dataParts] = parts;
-            const data = dataParts.join(':');
-            const index = parseInt(indexStr, 10);
-            const total = parseInt(totalStr, 10);
-
-            setScanProgress(prevProgress => {
-                let currentProgress = prevProgress;
-                if (!currentProgress || currentProgress.sessionId !== sessionId) {
-                    currentProgress = { sessionId, total, collected: 0, chunks: {} };
+        try {
+            // Basic validation to ensure it looks like our sync link
+            const url = new URL(decodedText);
+            if (url.hash.includes('/sync/')) {
+                if (scannerRef.current?.isScanning) {
+                    scannerRef.current.stop();
                 }
-                
-                if (!currentProgress.chunks[index]) {
-                    setScanFeedback(true);
-                    setTimeout(() => setScanFeedback(false), 300);
-
-                    const newChunks = { ...currentProgress.chunks, [index]: data };
-                    const collected = Object.keys(newChunks).length;
-                    return { ...currentProgress, chunks: newChunks, collected };
-                }
-                return prevProgress;
-            });
-            
-            scanTimeoutRef.current = window.setTimeout(() => {
-                setScanError("Scan timed out. Please try again from the beginning.");
-                resetScanState();
-            }, 5000);
-            return;
+                // Redirect to the sync page to handle the P2P connection
+                window.location.href = decodedText;
+            } else {
+                setScanError("Invalid QR code. Please scan a valid FinTrack AI sync code.");
+            }
+        } catch (error) {
+            setScanError("Scanned QR code is not a valid URL. Please try again.");
         }
-        
-        // Handle single QR codes by immediately setting progress to complete
-        setScanProgress({
-            sessionId: 'single',
-            total: 1,
-            collected: 1,
-            chunks: { 1: trimmedText }
-        });
-    }, [resetScanState]);
+    }, []);
     
     const startScanner = useCallback(() => {
-        resetScanState();
+        setScanError(null);
+        if (scannerRef.current && scannerRef.current.isScanning) {
+            return;
+        }
         const scanner = new Html5Qrcode('qr-reader');
         scannerRef.current = scanner;
         const config = { fps: 5, qrbox: { width: 250, height: 250 }, supportedScanTypes: [] };
 
-        scanner.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {})
+        scanner.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {
+            // This callback is for scan failures, which we can ignore as it's often noisy.
+        })
         .catch(err => {
-            setScanError(`Camera Error: ${err}. Please ensure camera permissions are enabled.`);
+            setScanError(`Camera Error: ${err}. Please ensure camera permissions are enabled for this site.`);
         });
-    }, [onScanSuccess, resetScanState]);
+    }, [onScanSuccess]);
 
     useEffect(() => {
         if (mode === 'scan') {
@@ -212,16 +63,14 @@ const LoginPage: React.FC = () => {
             if (scannerRef.current?.isScanning) {
                 scannerRef.current.stop().catch(e => console.error("Error stopping scanner on cleanup", e));
             }
-            if (scanTimeoutRef.current) {
-                clearTimeout(scanTimeoutRef.current);
-            }
         };
     }, [mode, startScanner]);
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (name.trim() && apiKeyInput.trim()) {
-            saveApiKey(apiKeyInput.trim());
+        // FIX: Simplified submit logic to only use the user's name.
+        if (name.trim()) {
+            // saveApiKey(apiKeyInput.trim());
             createUserAndLogin(name.trim());
         }
     };
@@ -247,7 +96,8 @@ const LoginPage: React.FC = () => {
                     <Card>
                         <h2 className="text-xl font-bold text-center text-text-primary mb-2">Get Started</h2>
                         <p className="text-sm text-text-secondary text-center mb-6">
-                            FinTrack AI runs entirely on your device. Your financial data is never sent to a server. Enter a nickname and your Gemini API key to begin.
+                            {/* FIX: Updated text to remove mention of API key. */}
+                            FinTrack AI runs entirely on your device. Your financial data is never sent to a server. Enter a nickname to begin.
                         </p>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
@@ -258,18 +108,8 @@ const LoginPage: React.FC = () => {
                                     className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
                                     placeholder="e.g., Alex's Finances" />
                             </div>
-                            <div>
-                                <label htmlFor="apiKey" className="block text-sm font-medium text-text-secondary mb-1">
-                                    Google Gemini API Key
-                                </label>
-                                <input id="apiKey" type="password" required value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)}
-                                    className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
-                                    placeholder="Paste your API key" />
-                                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline mt-1 inline-block">
-                                    Get a free key from Google AI Studio
-                                </a>
-                            </div>
-                            <button type="submit" disabled={!name.trim() || !apiKeyInput.trim()}
+                            {/* FIX: Removed API Key input field entirely. */}
+                            <button type="submit" disabled={!name.trim()}
                                 className="w-full bg-accent text-white font-semibold py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">
                                 Start Tracking
                             </button>
@@ -278,24 +118,19 @@ const LoginPage: React.FC = () => {
                         <button type="button" onClick={() => setMode('scan')}
                             className="w-full flex justify-center items-center gap-3 bg-surface border border-secondary text-text-primary font-semibold py-2.5 rounded-lg hover:bg-primary transition-colors">
                             <SparklesIcon className="w-5 h-5" />
-                            Sign In with QR Code
+                            Sign In via New Device Setup
                         </button>
                     </Card>
                 ) : (
                     <Card>
-                        <h2 className="text-xl font-bold text-center text-text-primary mb-2">Sign in with QR Code</h2>
+                        <h2 className="text-xl font-bold text-center text-text-primary mb-2">Sign In with QR Code</h2>
                         <p className="text-sm text-text-secondary text-center mb-6">
-                            Scan the animated code from another device to clone its profile.
+                            On your other device, go to Profile &gt; New Device Setup and scan the code.
                         </p>
                         <div 
                             id="qr-reader" 
-                            className={`w-full rounded-lg overflow-hidden border-2 bg-black transition-all duration-200 ${scanFeedback ? 'border-accent shadow-lg shadow-accent/50' : 'border-secondary'}`}
+                            className="w-full rounded-lg overflow-hidden border-2 bg-black border-secondary"
                         ></div>
-                        {scanProgress && (
-                            <p className="text-lg text-accent text-center font-semibold mt-4 animate-pulse">
-                                Scanning... {scanProgress.collected} / {scanProgress.total} parts received.
-                            </p>
-                        )}
                         {scanError && <p className="text-sm text-negative-text text-center mt-4">{scanError}</p>}
                         <button
                             type="button" onClick={() => setMode('create')}

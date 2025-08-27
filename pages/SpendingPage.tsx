@@ -224,7 +224,7 @@ const SpendingPage: React.FC = () => {
         </div>
       )}
 
-      <div>
+      <div className="hidden md:block">
         <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">Spending</h1>
         <p className="text-text-secondary">Track and analyze your spending habits.</p>
       </div>

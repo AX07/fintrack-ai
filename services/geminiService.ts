@@ -1,17 +1,15 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, FinanceData, Account, AssetCategory, Conversation } from '../types';
 
-function getApiKey(): string | null {
-    try {
-        return localStorage.getItem('finTrackGeminiApiKey');
-    } catch {
-        return null;
-    }
-}
+// FIX: Removed getApiKey function. API key must be obtained from environment variables.
 
 const getAiInstance = () => {
-    const apiKey = getApiKey();
-    if (!apiKey) return null;
+    // FIX: As per guidelines, the API key must come from the environment variable.
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+        console.error("API_KEY environment variable not set.");
+        return null;
+    }
     return new GoogleGenAI({ apiKey });
 };
 
@@ -121,7 +119,8 @@ const getSchemas = (categories: string[]) => {
 export const parseFileWithAI = async (file: File, prompt: string, categories: string[], existingTransactions: Transaction[]): Promise<{ transactions: Transaction[], accounts: Omit<Account, 'id'>[], duplicates_found: number }> => {
     const ai = getAiInstance();
     if (!ai) {
-        throw new Error("Gemini API Key not set. Please add it in your Profile page.");
+        // FIX: Updated error message to be generic and not prompt for an API key.
+        throw new Error("AI Service is not configured.");
     }
 
     const { fileParseSchema } = getSchemas(categories);
@@ -182,14 +181,16 @@ ${existingTransactionsSummary}
 
     } catch (error) {
         console.error("Error parsing file with AI:", error);
-        throw new Error("AI processing failed. Please check your API Key and ensure the uploaded file is a clear document (CSV, image, or PDF).");
+        // FIX: Removed mention of API key from the error message.
+        throw new Error("AI processing failed. Please ensure the uploaded file is a clear document (CSV, image, or PDF).");
     }
 };
 
 export const processUserCommand = async (query: string, financeData: { transactions: Transaction[], accounts: Account[], transactionCategories: string[] }, conversationHistory: Omit<Conversation, 'id' | 'timestamp'>[]): Promise<any> => {
     const ai = getAiInstance();
     if (!ai) {
-        return { ai_response: "I can't help with that because the Gemini API Key is not set. Please add it on the Profile page." };
+        // FIX: Updated error response to be generic.
+        return { ai_response: "I am unable to process your request as the AI service is not configured." };
     }
     
     const { accounts, transactionCategories } = financeData;
@@ -248,6 +249,7 @@ export const processUserCommand = async (query: string, financeData: { transacti
     } catch (error) {
         console.error("Error processing user command:", error);
         console.error("Failing query:", query);
-        return { ai_response: "I couldn't connect to the AI service. Please check that your API Key is correct and your internet connection is stable." };
+        // FIX: Removed mention of API key from the error message.
+        return { ai_response: "I couldn't connect to the AI service. Please check your internet connection." };
     }
 };
