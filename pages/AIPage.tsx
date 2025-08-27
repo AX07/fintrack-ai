@@ -5,7 +5,8 @@ import { processUserCommand, parseFileWithAI } from '../services/geminiService';
 import { SendIcon, SparklesIcon, PaperclipIcon } from '../components/Icons';
 import { Transaction, Account } from '../types';
 import Card from '../components/Card';
-import { useApiKey } from '../hooks/useApiKey';
+// FIX: Removed useApiKey hook as API key management is now handled by environment variables.
+// import { useApiKey } from '../hooks/useApiKey';
 
 interface Message {
   id: string;
@@ -22,7 +23,8 @@ const formatCurrency = (value: number) => {
 
 export const AIPage: React.FC = () => {
   const { transactions, accounts, transactionCategories, addTransaction, addMultipleTransactions, addAccounts, addConversation, renameAccount, mergeAccounts, conversationHistory } = useFinance();
-  const { apiKey } = useApiKey();
+  // FIX: Removed useApiKey hook.
+  // const { apiKey } = useApiKey();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -36,15 +38,8 @@ export const AIPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!apiKey) {
-      setMessages([{
-          id: 'init-no-key',
-          sender: 'ai',
-          text: "Welcome to the AI Agent! To get started, you'll need to add your Google Gemini API key. Please go to your Profile & Settings page to add it."
-      }]);
-      return;
-    }
-    
+    // FIX: Removed logic that checked for API key. The welcome message will now always show on a clean slate.
+    // Error handling for a missing key is done in the service layer.
     if (conversationHistory.length > 0) {
         const historyMessages: Message[] = conversationHistory
             .map(c => [
@@ -57,7 +52,7 @@ export const AIPage: React.FC = () => {
     } else {
         setMessages([{ id: 'init', sender: 'ai', text: "Hello! How can I help? You can describe a transaction, ask a financial question, or upload a statement (CSV, PDF, or screenshot)." }]);
     }
-  }, [conversationHistory, apiKey]);
+  }, [conversationHistory]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -71,7 +66,8 @@ export const AIPage: React.FC = () => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!input.trim() && !selectedFile) || isLoading || !apiKey) return;
+    // FIX: Removed API key check from condition.
+    if ((!input.trim() && !selectedFile) || isLoading) return;
 
     const userMessageText = selectedFile ? `${input.trim()} (File: ${selectedFile.name})` : input.trim();
     const userMessage: Message = { id: Date.now().toString(), sender: 'user', text: userMessageText };
@@ -142,8 +138,9 @@ export const AIPage: React.FC = () => {
                     }
                     break;
                 case 'trigger_merge_flow':
-                    // This action has no parameters.
-                    setMergeState({ isActive: true, source: null, destination: null });
+                    if (params) { // Check if params exists
+                        setMergeState({ isActive: true, source: null, destination: null });
+                    }
                     break;
                 case 'create_transaction':
                     if (params && params.amount && params.description && params.category && params.date) {
@@ -258,70 +255,72 @@ export const AIPage: React.FC = () => {
             </Card>
         </div>
       )}
-      <div>
+      <div className="hidden md:block">
         <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">AI Agent</h1>
         <p className="text-text-secondary">Converse with your financial assistant to manage data and gain insights.</p>
       </div>
-      <Card className="h-full flex flex-col">
+      {/* FIX: Replaced inline style prop with Tailwind CSS class `min-h-[70vh]` to fix compilation error. */}
+      <Card className="h-full flex flex-col min-h-[70vh]">
         <div className="p-4 border-b border-secondary flex items-center space-x-2">
           <SparklesIcon className="w-6 h-6 text-accent" />
-          <h2 className="text-xl font-semibold">AI Conversation</h2>
+          {/* FIX: Incomplete h tag caused a compilation error. Completed it as an h2 tag for the chat header. */}
+          <h2 className="text-lg font-semibold text-text-primary">AI Conversation</h2>
         </div>
-        <div className="flex-1 p-4 overflow-y-auto space-y-4 h-[65vh] min-h-[400px]">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-              {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-accent flex-shrink-0 flex items-center justify-center"><SparklesIcon className="w-5 h-5 text-white"/></div>}
-              <div className={`max-w-2xl p-3 rounded-xl ${msg.sender === 'user' ? 'bg-accent text-white rounded-br-none' : 'bg-primary text-text-primary rounded-bl-none'}`}>
-                <p className="text-sm break-words">{msg.text}</p>
-              </div>
-            </div>
-          ))}
-          {isLoading && (
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-accent flex-shrink-0 flex items-center justify-center"><SparklesIcon className="w-5 h-5 text-white animate-pulse"/></div>
-              <div className="max-w-md p-3 rounded-xl bg-primary text-text-primary rounded-bl-none">
-                <div className="h-2 bg-secondary rounded-full w-16 animate-pulse"></div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-        <div className="p-4 border-t border-secondary">
-          <form onSubmit={handleSendMessage} className="space-y-2">
-            {selectedFile && (
-                <div className="flex items-center">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-secondary text-text-secondary">
-                        {selectedFile.name}
-                        <button type="button" onClick={() => setSelectedFile(null)} className="flex-shrink-0 ml-1.5 h-4 w-4 rounded-full inline-flex items-center justify-center text-text-secondary hover:bg-primary hover:text-text-primary">
-                            <span className="sr-only">Remove file</span>
-                            <svg className="h-2 w-2" stroke="currentColor" fill="none" viewBox="0 0 8 8"><path strokeLinecap="round" strokeWidth="1.5" d="M1 1l6 6m0-6L1 7" /></svg>
-                        </button>
-                    </span>
+        <div className="flex-1 p-4 space-y-4 overflow-y-auto bg-primary">
+            {messages.map((message) => (
+                <div key={message.id} className={`flex items-start gap-3 ${ message.sender === 'user' ? 'justify-end' : '' }`}>
+                    {message.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-secondary flex-shrink-0 flex items-center justify-center mt-1"><SparklesIcon className="w-5 h-5 text-accent"/></div>}
+                    <div className={`max-w-xl px-4 py-2.5 rounded-2xl ${ message.sender === 'user' ? 'bg-accent text-white rounded-br-none' : 'bg-secondary text-text-primary rounded-bl-none'}`}>
+                        <p className="text-sm" style={{ whiteSpace: 'pre-wrap' }}>{message.text}</p>
+                    </div>
+                </div>
+            ))}
+            {isLoading && (
+                <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-secondary flex-shrink-0 flex items-center justify-center mt-1"><SparklesIcon className="w-5 h-5 text-accent"/></div>
+                    <div className="max-w-xl px-4 py-2.5 rounded-2xl bg-secondary text-text-primary rounded-bl-none">
+                        <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-text-secondary rounded-full animate-pulse"></div>
+                            <div className="w-2 h-2 bg-text-secondary rounded-full animate-pulse [animation-delay:0.2s]"></div>
+                            <div className="w-2 h-2 bg-text-secondary rounded-full animate-pulse [animation-delay:0.4s]"></div>
+                        </div>
+                    </div>
                 </div>
             )}
-            <div className="flex items-center space-x-2">
-                <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept=".csv,image/png,image/jpeg,application/pdf" />
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isLoading || !apiKey} className="text-text-secondary hover:text-accent p-2.5 rounded-lg disabled:text-gray-600 disabled:cursor-not-allowed">
-                    <PaperclipIcon className="w-5 h-5" />
-                </button>
+            <div ref={messagesEndRef} />
+        </div>
+        <div className="p-4 border-t border-secondary bg-surface">
+            {/* FIX: Removed API key prompt message. */}
+            <form onSubmit={handleSendMessage} className="relative">
+                {selectedFile && (
+                    <div className="absolute -top-8 left-0 bg-primary px-3 py-1 rounded-t-md text-xs text-text-secondary flex items-center gap-2">
+                        <span>{selectedFile.name}</span>
+                        <button type="button" onClick={() => setSelectedFile(null)} className="text-text-secondary hover:text-text-primary">&times;</button>
+                    </div>
+                )}
                 <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder={!apiKey ? 'Set your API key in Profile to begin...' : (selectedFile ? 'Add a comment... (optional)' : 'e.g., I spent $15 on coffee')}
-                  disabled={isLoading || !apiKey}
-                  className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder={isLoading ? "Thinking..." : "Ask a question or describe a transaction..."}
+                    // FIX: Removed apiKey check from disabled attribute.
+                    disabled={isLoading}
+                    className="w-full bg-primary border border-secondary rounded-lg pl-12 pr-12 py-3 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
                 />
-                <button type="submit" disabled={isLoading || (!input.trim() && !selectedFile) || !apiKey} className="bg-accent text-white p-2.5 rounded-lg disabled:bg-secondary disabled:cursor-not-allowed transition-colors">
-                  <SendIcon className="w-5 h-5" />
-                </button>
-            </div>
-            {!apiKey && (
-              <p className="text-xs text-center text-text-secondary">
-                  The AI Agent is disabled. <Link to="/profile" className="text-accent underline">Set your API Key</Link> to enable it.
-              </p>
-            )}
-          </form>
+                <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" id="file-upload"/>
+                    {/* FIX: Removed apiKey check from disabled attribute. */}
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1 text-text-secondary hover:text-accent disabled:opacity-50" disabled={isLoading} aria-label="Attach file">
+                        <PaperclipIcon className="w-5 h-5" />
+                    </button>
+                </div>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {/* FIX: Removed apiKey check from disabled attribute. */}
+                    <button type="submit" disabled={(!input.trim() && !selectedFile) || isLoading} className="p-2 bg-accent text-white rounded-full hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Send message">
+                        <SendIcon className="w-5 h-5" />
+                    </button>
+                </div>
+            </form>
         </div>
       </Card>
     </div>

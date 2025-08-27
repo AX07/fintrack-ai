@@ -130,7 +130,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+      <div className="hidden md:flex flex-col sm:flex-row justify-between sm:items-center gap-2">
         <div>
           <h1 className="text-3xl font-bold text-text-primary">Dashboard</h1>
           <p className="text-text-secondary mt-1">Your financial overview at a glance</p>

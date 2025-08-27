@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useFinance } from '../hooks/useFinance';
@@ -66,8 +65,8 @@ const AccountDetailPage: React.FC = () => {
                     <ArrowLeftIcon className="w-4 h-4"/>
                     Back to Assets
                 </Link>
-                <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">Manage: {account.name}</h1>
-                <p className="text-text-secondary">{account.category}</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-text-primary hidden md:block">Manage: {account.name}</h1>
+                <p className="text-text-secondary hidden md:block">{account.category}</p>
             </div>
 
             <Card>

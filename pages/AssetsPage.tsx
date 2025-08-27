@@ -100,7 +100,7 @@ const AssetsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="hidden md:block">
         <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">Assets</h1>
         <p className="text-text-secondary">Your complete financial picture in one place.</p>
       </div>

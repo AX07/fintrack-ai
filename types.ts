@@ -1,4 +1,5 @@
 
+
 export interface User {
   id: string;
   name: string;
@@ -63,5 +64,5 @@ export interface FinanceData {
 export interface SyncPayload {
     user: User;
     financeData: FinanceData;
-    apiKey: string;
+    // FIX: Removed apiKey as per security guidelines. API keys should not be transferred between devices.
 }
