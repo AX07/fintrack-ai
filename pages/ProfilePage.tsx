@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import QRCode from 'qrcode';
 import pako from 'pako';
@@ -5,8 +6,7 @@ import { Peer } from 'peerjs';
 import Card from '../components/Card';
 import { useAuth } from '../hooks/useAuth';
 import { useFinance } from '../hooks/useFinance';
-// FIX: Removed useApiKey as it is no longer needed.
-// import { useApiKey } from '../hooks/useApiKey';
+import { useApiKey } from '../hooks/useApiKey';
 import { exportTransactionsToCSV, exportAccountsToCSV } from '../utils/export';
 import { toV2Format } from '../utils/sync';
 import { DownloadIcon, TrashIcon, LogOutIcon, SyncIcon, SparklesIcon } from '../components/Icons';
@@ -14,10 +14,9 @@ import { FinanceData, SyncPayload } from '../types';
 
 const ProfilePage: React.FC = () => {
     const { user, logout } = useAuth();
-    const { transactions, accounts, transactionCategories, lastUpdated, clearAllData } = useFinance();
-    // FIX: Removed API key state management from the UI.
-    // const { apiKey, saveApiKey, removeApiKey } = useApiKey();
-    // const [keyInput, setKeyInput] = useState('');
+    const { transactions, accounts, transactionCategories, conversationHistory, lastUpdated, clearAllData } = useFinance();
+    const { apiKey, saveApiKey, removeApiKey } = useApiKey();
+    const [keyInput, setKeyInput] = useState('');
     
     // --- State for New Device Setup ---
     const [syncState, setSyncState] = useState<'idle' | 'generating' | 'waiting' | 'connected' | 'sending' | 'complete' | 'error'>('idle');
@@ -61,11 +60,10 @@ const ProfilePage: React.FC = () => {
                 conn.on('open', () => {
                     setSyncState('sending');
                     const financeDataForSync: FinanceData = {
-                        transactions, accounts, conversationHistory: [], transactionCategories, lastUpdated,
+                        transactions, accounts, conversationHistory, transactionCategories, lastUpdated,
                     };
-                    // FIX: Removed apiKey from the sync payload.
                     const payload: SyncPayload = {
-                        user, financeData: financeDataForSync,
+                        user, financeData: financeDataForSync, apiKey,
                     };
                     const compactPayload = toV2Format(payload);
                     const jsonString = JSON.stringify(compactPayload);
@@ -132,9 +130,8 @@ const ProfilePage: React.FC = () => {
         }
     };
     
-    // FIX: Removed functions related to UI-based API key management.
-    // const handleSaveKey = () => { if (keyInput.trim()) { saveApiKey(keyInput.trim()); setKeyInput(''); alert('API Key saved successfully!'); } };
-    // const handleRemoveKey = () => { if (window.confirm('Are you sure you want to remove your API key?')) { removeApiKey(); } };
+    const handleSaveKey = () => { if (keyInput.trim()) { saveApiKey(keyInput.trim()); setKeyInput(''); alert('API Key saved successfully!'); } };
+    const handleRemoveKey = () => { if (window.confirm('Are you sure you want to remove your API key?')) { removeApiKey(); } };
     const handleDeleteAllData = () => { if (window.confirm("Are you sure? This will delete all your financial data. This cannot be undone.")) { clearAllData(); logout(); } };
     
     if (!user) return null;
@@ -148,7 +145,41 @@ const ProfilePage: React.FC = () => {
 
             <Card><div className="flex items-center gap-4"><img className="h-20 w-20 rounded-full" src={user.avatar} alt="User Avatar" /><div><h2 className="text-2xl font-bold">{user.name}</h2></div></div></Card>
             
-            {/* FIX: Removed the entire Gemini API Key card from the UI. */}
+            <Card>
+                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <SparklesIcon className="w-5 h-5 text-text-secondary"/>
+                    Gemini API Key
+                </h2>
+                {apiKey ? (
+                    <div className="space-y-3">
+                        <p className="text-sm text-text-secondary">Your API key is saved. You can update it by entering a new one below.</p>
+                        <div className="p-3 rounded-lg bg-secondary flex items-center justify-between">
+                            <span className="font-mono text-sm text-text-secondary">sk-••••••••{apiKey.slice(-4)}</span>
+                            <button onClick={handleRemoveKey} className="text-xs font-semibold text-negative-text hover:underline">Remove Key</button>
+                        </div>
+                    </div>
+                ) : (
+                    <p className="text-text-secondary mb-4">
+                        Add your Google Gemini API key to enable the AI Agent. You can get a free key from Google AI Studio.
+                    </p>
+                )}
+                <div className="flex gap-3 mt-4">
+                    <input
+                        type="password"
+                        value={keyInput}
+                        onChange={(e) => setKeyInput(e.target.value)}
+                        placeholder={apiKey ? "Enter new key to update" : "Enter your API key"}
+                        className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                    <button
+                        onClick={handleSaveKey}
+                        disabled={!keyInput.trim()}
+                        className="bg-accent text-white font-semibold py-2 px-4 rounded-lg transition-colors hover:opacity-90 disabled:opacity-50"
+                    >
+                        Save
+                    </button>
+                </div>
+            </Card>
 
             <Card>
                 <h2 className="text-xl font-semibold mb-4 flex items-center gap-2"><SyncIcon className="w-5 h-5 text-text-secondary"/>New Device Setup</h2>

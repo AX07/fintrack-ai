@@ -3,8 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Peer } from 'peerjs';
 import pako from 'pako';
 import { useAuth } from '../hooks/useAuth';
-// FIX: Removed unused useApiKey import.
-// import { useApiKey } from '../hooks/useApiKey';
+import { useApiKey } from '../hooks/useApiKey';
 import { fromV2Format } from '../utils/sync';
 import Card from '../components/Card';
 import { LogoIcon, SparklesIcon } from '../components/Icons';
@@ -13,8 +12,7 @@ const SyncPage: React.FC = () => {
     const { peerId } = useParams<{ peerId: string }>();
     const navigate = useNavigate();
     const { login } = useAuth();
-    // FIX: Removed unused useApiKey hook.
-    // const { saveApiKey } = useApiKey();
+    const { saveApiKey } = useApiKey();
     
     const [status, setStatus] = useState('Initializing...');
     const peerRef = useRef<Peer | null>(null);
@@ -53,8 +51,10 @@ const SyncPage: React.FC = () => {
                         const payload = fromV2Format(compactPayload);
 
                         if (payload && payload.user && payload.financeData) {
+                            if (payload.apiKey) {
+                                saveApiKey(payload.apiKey);
+                            }
                             login(payload.user, payload.financeData);
-                            // FIX: Removed logic to save API key from sync payload.
                             setStatus('Sync complete! Welcome back.');
                             setTimeout(() => navigate('/dashboard'), 1500);
                         } else {
@@ -94,7 +94,7 @@ const SyncPage: React.FC = () => {
 
         return () => cleanupPeer();
 
-    }, [peerId, login, navigate]);
+    }, [peerId, login, navigate, saveApiKey]);
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-text-primary">
