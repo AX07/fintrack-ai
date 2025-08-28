@@ -39,7 +39,7 @@ export const toV2Format = (data: SyncPayload) => {
     return {
         u: data.user,
         d: compactFinanceData, // d for data
-        // k: data.apiKey,       // k for key (FIX: Removed)
+        k: data.apiKey,       // k for key
     };
 };
 
@@ -84,7 +84,7 @@ export const fromV2Format = (compactData: any): SyncPayload | null => {
         return {
             user: compactData.u,
             financeData: financeData,
-            // apiKey: compactData.k, // FIX: Removed
+            apiKey: compactData.k || null,
         };
     } catch (error) {
         console.error("Failed to parse V2 compact data format", error);

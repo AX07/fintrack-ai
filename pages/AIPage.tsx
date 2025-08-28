@@ -5,8 +5,7 @@ import { processUserCommand, parseFileWithAI } from '../services/geminiService';
 import { SendIcon, SparklesIcon, PaperclipIcon } from '../components/Icons';
 import { Transaction, Account } from '../types';
 import Card from '../components/Card';
-// FIX: Removed useApiKey hook as API key management is now handled by environment variables.
-// import { useApiKey } from '../hooks/useApiKey';
+import { useApiKey } from '../hooks/useApiKey';
 
 interface Message {
   id: string;
@@ -23,8 +22,7 @@ const formatCurrency = (value: number) => {
 
 export const AIPage: React.FC = () => {
   const { transactions, accounts, transactionCategories, addTransaction, addMultipleTransactions, addAccounts, addConversation, renameAccount, mergeAccounts, conversationHistory } = useFinance();
-  // FIX: Removed useApiKey hook.
-  // const { apiKey } = useApiKey();
+  const { apiKey } = useApiKey();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -38,8 +36,6 @@ export const AIPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // FIX: Removed logic that checked for API key. The welcome message will now always show on a clean slate.
-    // Error handling for a missing key is done in the service layer.
     if (conversationHistory.length > 0) {
         const historyMessages: Message[] = conversationHistory
             .map(c => [
@@ -49,10 +45,12 @@ export const AIPage: React.FC = () => {
             .flat()
             .reverse();
         setMessages(historyMessages);
+    } else if (!apiKey) {
+        setMessages([{ id: 'init-no-key', sender: 'ai', text: "Welcome! To activate the AI Agent, please add your Google Gemini API key in the Profile & Settings page." }]);
     } else {
         setMessages([{ id: 'init', sender: 'ai', text: "Hello! How can I help? You can describe a transaction, ask a financial question, or upload a statement (CSV, PDF, or screenshot)." }]);
     }
-  }, [conversationHistory]);
+  }, [conversationHistory, apiKey]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -66,8 +64,7 @@ export const AIPage: React.FC = () => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    // FIX: Removed API key check from condition.
-    if ((!input.trim() && !selectedFile) || isLoading) return;
+    if ((!input.trim() && !selectedFile) || isLoading || !apiKey) return;
 
     const userMessageText = selectedFile ? `${input.trim()} (File: ${selectedFile.name})` : input.trim();
     const userMessage: Message = { id: Date.now().toString(), sender: 'user', text: userMessageText };
@@ -117,18 +114,18 @@ export const AIPage: React.FC = () => {
         const commandResponse = await processUserCommand(textPrompt, { transactions, accounts, transactionCategories }, conversationHistory);
         aiResponseText = commandResponse.ai_response;
 
-        if (commandResponse.action) {
+        if (commandResponse.action && commandResponse.parameters) {
             const params = commandResponse.parameters;
             switch (commandResponse.action) {
                 case 'create_account':
-                    if (params && params.accounts && params.accounts.length > 0) {
+                    if (params.accounts && params.accounts.length > 0) {
                         addAccounts(params.accounts);
                     } else {
                         aiResponseText = "I was ready to create an account, but the details were missing. Could you please clarify?";
                     }
                     break;
                 case 'rename_account':
-                    if (params && params.oldName && params.newName) {
+                    if (params.oldName && params.newName) {
                         renameAccount({
                             oldName: params.oldName,
                             newName: params.newName
@@ -138,12 +135,11 @@ export const AIPage: React.FC = () => {
                     }
                     break;
                 case 'trigger_merge_flow':
-                    if (params) { // Check if params exists
-                        setMergeState({ isActive: true, source: null, destination: null });
-                    }
+                    // This action might not need parameters, the check for `parameters` is the issue.
+                    setMergeState({ isActive: true, source: null, destination: null });
                     break;
                 case 'create_transaction':
-                    if (params && params.amount && params.description && params.category && params.date) {
+                    if (params.amount && params.description && params.category && params.date) {
                         const newTransaction: Transaction = {
                             id: `txn-${Date.now()}`,
                             date: params.date,
@@ -158,6 +154,9 @@ export const AIPage: React.FC = () => {
                     }
                     break;
             }
+        } else if (commandResponse.action === 'trigger_merge_flow') {
+            // Handle case where action exists but parameters object does not.
+            setMergeState({ isActive: true, source: null, destination: null });
         }
 
         if (!aiResponseText) {
@@ -259,11 +258,9 @@ export const AIPage: React.FC = () => {
         <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">AI Agent</h1>
         <p className="text-text-secondary">Converse with your financial assistant to manage data and gain insights.</p>
       </div>
-      {/* FIX: Replaced inline style prop with Tailwind CSS class `min-h-[70vh]` to fix compilation error. */}
       <Card className="h-full flex flex-col min-h-[70vh]">
         <div className="p-4 border-b border-secondary flex items-center space-x-2">
           <SparklesIcon className="w-6 h-6 text-accent" />
-          {/* FIX: Incomplete h tag caused a compilation error. Completed it as an h2 tag for the chat header. */}
           <h2 className="text-lg font-semibold text-text-primary">AI Conversation</h2>
         </div>
         <div className="flex-1 p-4 space-y-4 overflow-y-auto bg-primary">
@@ -290,7 +287,14 @@ export const AIPage: React.FC = () => {
             <div ref={messagesEndRef} />
         </div>
         <div className="p-4 border-t border-secondary bg-surface">
-            {/* FIX: Removed API key prompt message. */}
+             {!apiKey && (
+                <div className="text-center pb-4">
+                    <p className="text-sm text-text-secondary">
+                        To use the AI Agent, please add your Google Gemini API key in the{' '}
+                        <Link to="/profile" className="text-accent underline font-semibold">Profile & Settings</Link> page.
+                    </p>
+                </div>
+            )}
             <form onSubmit={handleSendMessage} className="relative">
                 {selectedFile && (
                     <div className="absolute -top-8 left-0 bg-primary px-3 py-1 rounded-t-md text-xs text-text-secondary flex items-center gap-2">
@@ -302,21 +306,18 @@ export const AIPage: React.FC = () => {
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder={isLoading ? "Thinking..." : "Ask a question or describe a transaction..."}
-                    // FIX: Removed apiKey check from disabled attribute.
-                    disabled={isLoading}
+                    placeholder={!apiKey ? "API Key required" : (isLoading ? "Thinking..." : "Ask a question or describe a transaction...")}
+                    disabled={!apiKey || isLoading}
                     className="w-full bg-primary border border-secondary rounded-lg pl-12 pr-12 py-3 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2">
                     <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" id="file-upload"/>
-                    {/* FIX: Removed apiKey check from disabled attribute. */}
-                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1 text-text-secondary hover:text-accent disabled:opacity-50" disabled={isLoading} aria-label="Attach file">
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1 text-text-secondary hover:text-accent disabled:opacity-50" disabled={!apiKey || isLoading} aria-label="Attach file">
                         <PaperclipIcon className="w-5 h-5" />
                     </button>
                 </div>
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {/* FIX: Removed apiKey check from disabled attribute. */}
-                    <button type="submit" disabled={(!input.trim() && !selectedFile) || isLoading} className="p-2 bg-accent text-white rounded-full hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Send message">
+                    <button type="submit" disabled={(!input.trim() && !selectedFile) || isLoading || !apiKey} className="p-2 bg-accent text-white rounded-full hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Send message">
                         <SendIcon className="w-5 h-5" />
                     </button>
                 </div>

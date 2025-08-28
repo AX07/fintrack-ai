@@ -1,22 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-// FIX: Removed useApiKey as it is no longer needed.
-// import { useApiKey } from '../hooks/useApiKey';
+import { useApiKey } from '../hooks/useApiKey';
 import Card from '../components/Card';
 import { LogoIcon, SparklesIcon } from '../components/Icons';
 import { Html5Qrcode } from 'html5-qrcode';
 
 const LoginPage: React.FC = () => {
     const [name, setName] = useState('');
-    // FIX: Removed state for API key input.
-    // const [apiKeyInput, setApiKeyInput] = useState('');
+    const [apiKeyInput, setApiKeyInput] = useState('');
     const [mode, setMode] = useState<'create' | 'scan'>('create');
     const [scanError, setScanError] = useState<string | null>(null);
     
     const { createUserAndLogin, isAuthenticated } = useAuth();
-    // FIX: Removed useApiKey hook.
-    // const { saveApiKey } = useApiKey();
+    const { saveApiKey } = useApiKey();
 
     const scannerRef = useRef<Html5Qrcode | null>(null);
 
@@ -68,9 +65,8 @@ const LoginPage: React.FC = () => {
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        // FIX: Simplified submit logic to only use the user's name.
-        if (name.trim()) {
-            // saveApiKey(apiKeyInput.trim());
+        if (name.trim() && apiKeyInput.trim()) {
+            saveApiKey(apiKeyInput.trim());
             createUserAndLogin(name.trim());
         }
     };
@@ -96,8 +92,7 @@ const LoginPage: React.FC = () => {
                     <Card>
                         <h2 className="text-xl font-bold text-center text-text-primary mb-2">Get Started</h2>
                         <p className="text-sm text-text-secondary text-center mb-6">
-                            {/* FIX: Updated text to remove mention of API key. */}
-                            FinTrack AI runs entirely on your device. Your financial data is never sent to a server. Enter a nickname to begin.
+                            FinTrack AI runs entirely on your device. Your financial data is never sent to a server. Enter your details to begin.
                         </p>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
@@ -108,8 +103,18 @@ const LoginPage: React.FC = () => {
                                     className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
                                     placeholder="e.g., Alex's Finances" />
                             </div>
-                            {/* FIX: Removed API Key input field entirely. */}
-                            <button type="submit" disabled={!name.trim()}
+                            <div>
+                                <label htmlFor="api-key" className="block text-sm font-medium text-text-secondary mb-1">
+                                    Google Gemini API Key
+                                </label>
+                                <input id="api-key" type="password" required value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)}
+                                    className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                                    placeholder="Enter your API key" />
+                                <p className="text-xs text-text-secondary mt-1.5">
+                                    You can get a free key from Google AI Studio.
+                                </p>
+                            </div>
+                            <button type="submit" disabled={!name.trim() || !apiKeyInput.trim()}
                                 className="w-full bg-accent text-white font-semibold py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">
                                 Start Tracking
                             </button>
