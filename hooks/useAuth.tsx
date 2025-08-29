@@ -8,6 +8,7 @@ interface AuthContextType {
   createUserAndLogin: (name: string) => void;
   login: (user: User, financeData?: FinanceData) => void; // For QR code sign-in
   logout: () => void;
+  updateUser: (updatedDetails: Partial<Omit<User, 'id'>>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -92,7 +93,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     navigate('/login');
   };
 
-  const value = { isAuthenticated, user, createUserAndLogin, login, logout };
+  const updateUser = (updatedDetails: Partial<Omit<User, 'id'>>) => {
+    setUser(currentUser => {
+        if (!currentUser) return null;
+
+        const users = getUsersFromStorage();
+        const updatedUser: User = { ...currentUser, ...updatedDetails };
+        
+        users[currentUser.id] = updatedUser;
+        localStorage.setItem(USERS_DB_STORAGE_KEY, JSON.stringify(users));
+        
+        return updatedUser;
+    });
+  };
+
+  const value = { isAuthenticated, user, createUserAndLogin, login, logout, updateUser };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

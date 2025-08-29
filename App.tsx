@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
@@ -13,6 +11,7 @@ const App: React.FC = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/sync/:peerId" element={<SyncPage />} />
         <Route element={<ProtectedRoute />}>
+            {/* The MainLayout route with path="/*" will handle /explore and all other protected routes */}
             <Route path="/*" element={<MainLayout />} />
         </Route>
       </Routes>

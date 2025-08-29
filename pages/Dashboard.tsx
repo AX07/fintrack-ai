@@ -3,32 +3,17 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, BarChart, Bar } from 'recharts';
 import Card from '../components/Card';
-import { useFinance } from '../hooks/useFinance';
+import { useFinance, useCurrency } from '../hooks/useFinance';
 import { AssetCategory } from '../types';
 import { DollarSignIcon, TrendingDownIcon, TrendingUpIcon, LogoIcon } from '../components/Icons';
 import EmptyState from '../components/EmptyState';
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value);
-};
-
-const formatCurrencyWithCents = (value: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(value);
-};
-
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, formatter }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-primary p-3 rounded-lg border border-secondary shadow-lg">
         <p className="text-text-secondary text-sm">{label}</p>
-        <p className="text-text-primary font-bold">{formatCurrencyWithCents(payload[0].value)}</p>
+        <p className="text-text-primary font-bold">{formatter(payload[0].value)}</p>
       </div>
     );
   }
@@ -106,6 +91,7 @@ const ActivityChart: React.FC<{ data: { date: string; count: number }[]; streak:
 
 const Dashboard: React.FC = () => {
     const { transactions, accounts } = useFinance();
+    const { formatCurrency } = useCurrency();
 
     const totalAssetsValue = useMemo(() => accounts.reduce((sum, account) => sum + account.balance, 0), [accounts]);
     
@@ -118,9 +104,7 @@ const Dashboard: React.FC = () => {
     }, [transactions]);
 
     const allocationData = useMemo(() => {
-        if (accounts.length === 0) {
-            return [];
-        }
+        if (accounts.length === 0) return [];
         const byCategory = accounts.reduce((acc, account) => {
             acc[account.category] = (acc[account.category] || 0) + account.balance;
             return acc;
@@ -129,9 +113,7 @@ const Dashboard: React.FC = () => {
     }, [accounts]);
     
     const portfolioHistoryData = useMemo(() => {
-        if (accounts.length === 0 && transactions.length === 0) {
-            return [];
-        }
+        if (accounts.length === 0 && transactions.length === 0) return [];
 
         const dailyNetChange = transactions.reduce((acc, t) => {
             acc[t.date] = (acc[t.date] || 0) + t.amount;
@@ -147,26 +129,15 @@ const Dashboard: React.FC = () => {
             const date = new Date();
             date.setDate(today.getDate() - i);
             const dateString = date.toISOString().split('T')[0];
-
-            data.push({
-                date: dateString,
-                value: runningValue,
-            });
-            
-            const netChange = dailyNetChange[dateString] || 0;
-            runningValue -= netChange;
+            data.push({ date: dateString, value: runningValue });
+            runningValue -= (dailyNetChange[dateString] || 0);
         }
-
-        return data.reverse().map(d => ({
-            ...d,
-            date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        }));
+        return data.reverse().map(d => ({ ...d, date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }));
     }, [transactions, accounts]);
 
     const spendingByCategoryThisMonth = useMemo(() => {
         const now = new Date();
         const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        
         const categoryTotals = transactions
             .filter(t => t.amount < 0 && new Date(t.date) >= firstDayOfMonth)
             .reduce((acc, t) => {
@@ -174,58 +145,36 @@ const Dashboard: React.FC = () => {
                 return acc;
             }, {} as Record<string, number>);
 
-        return Object.entries(categoryTotals)
-            .map(([name, value]) => ({ name, value }))
-            .sort((a, b) => b.value - a.value);
+        return Object.entries(categoryTotals).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
     }, [transactions]);
 
     const activityData = useMemo(() => {
         const dailyCounts: { [date: string]: number } = {};
-        transactions.forEach(t => {
-            dailyCounts[t.date] = (dailyCounts[t.date] || 0) + 1;
-        });
-
+        transactions.forEach(t => { dailyCounts[t.date] = (dailyCounts[t.date] || 0) + 1; });
         const data = [];
         const today = new Date();
-        // Go back a full year (52 weeks)
         for (let i = 364; i >= 0; i--) {
             const date = new Date();
             date.setDate(today.getDate() - i);
             const dateString = date.toISOString().split('T')[0];
-            data.push({
-                date: dateString,
-                count: dailyCounts[dateString] || 0,
-            });
+            data.push({ date: dateString, count: dailyCounts[dateString] || 0 });
         }
         return data;
     }, [transactions]);
     
     const activityStreak = useMemo(() => {
         if (transactions.length === 0) return 0;
-
         const transactionDates = new Set(transactions.map(t => t.date));
-        
         let currentDate = new Date();
-        const todayStr = currentDate.toISOString().split('T')[0];
-        
-        // A streak is only "current" if there was a transaction today or yesterday.
-        // If no transaction today, we start counting from yesterday.
-        if (!transactionDates.has(todayStr)) {
+        if (!transactionDates.has(currentDate.toISOString().split('T')[0])) {
             currentDate.setDate(currentDate.getDate() - 1);
         }
-        
-        // Check if there's even a transaction on our starting day (today or yesterday)
-        const currentDateStr = currentDate.toISOString().split('T')[0];
-        if (!transactionDates.has(currentDateStr)) {
-            return 0;
-        }
-        
+        if (!transactionDates.has(currentDate.toISOString().split('T')[0])) return 0;
         let streak = 0;
         while (transactionDates.has(currentDate.toISOString().split('T')[0])) {
             streak++;
             currentDate.setDate(currentDate.getDate() - 1);
         }
-        
         return streak;
     }, [transactions]);
 
@@ -244,11 +193,7 @@ const Dashboard: React.FC = () => {
                 icon={<LogoIcon className="w-8 h-8" />}
                 title="Welcome to FinTrack AI"
                 message="Your dashboard is empty. Get started by adding a transaction or uploading a bank statement in the AI Agent tab."
-                action={
-                    <Link to="/ai" className="bg-accent text-white font-semibold py-2 px-4 rounded-lg hover:opacity-90 transition-opacity">
-                        Go to AI Agent
-                    </Link>
-                }
+                action={<Link to="/ai" className="bg-accent text-white font-semibold py-2 px-4 rounded-lg hover:opacity-90">Go to AI Agent</Link>}
             />
         );
     }
@@ -263,35 +208,27 @@ const Dashboard: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card className="md:col-span-1">
-                    <div className="flex items-center gap-3 text-text-secondary">
-                        <DollarSignIcon className="w-5 h-5" />
-                        <h2 className="font-medium">Total Net Worth</h2>
-                    </div>
-                    <p className="text-3xl font-bold text-text-primary mt-2">{formatCurrency(totalAssetsValue)}</p>
+                    <div className="flex items-center gap-3 text-text-secondary"><DollarSignIcon className="w-5 h-5" /><h2 className="font-medium">Total Net Worth</h2></div>
+                    <p className="text-3xl font-bold text-text-primary mt-2">{formatCurrency(totalAssetsValue, { maximumFractionDigits: 0 })}</p>
                     <div className={`mt-2 flex items-center gap-1 text-sm ${portfolioChange.value >= 0 ? 'text-positive-text' : 'text-negative-text'}`}>
                         {portfolioChange.value >= 0 ? <TrendingUpIcon className="w-4 h-4" /> : <TrendingDownIcon className="w-4 h-4" />}
-                        <span>{formatCurrencyWithCents(portfolioChange.value)} ({portfolioChange.percentage.toFixed(2)}%)</span>
+                        <span>{formatCurrency(portfolioChange.value)} ({portfolioChange.percentage.toFixed(2)}%)</span>
                         <span className="text-text-secondary text-xs">past 30 days</span>
                     </div>
                 </Card>
                 <Card className="md:col-span-1">
-                    <div className="flex items-center gap-3 text-text-secondary">
-                        <TrendingDownIcon className="w-5 h-5" />
-                        <h2 className="font-medium">Spent This Month</h2>
-                    </div>
-                    <p className="text-3xl font-bold text-text-primary mt-2">{formatCurrency(totalSpendingThisMonth)}</p>
+                    <div className="flex items-center gap-3 text-text-secondary"><TrendingDownIcon className="w-5 h-5" /><h2 className="font-medium">Spent This Month</h2></div>
+                    <p className="text-3xl font-bold text-text-primary mt-2">{formatCurrency(totalSpendingThisMonth, { maximumFractionDigits: 0 })}</p>
                 </Card>
                 <Card className="md:col-span-1">
-                    <div className="flex items-center gap-3 text-text-secondary">
-                         <h2 className="font-medium">Asset Allocation</h2>
-                    </div>
+                    <h2 className="font-medium text-text-secondary">Asset Allocation</h2>
                      <div className="h-24">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie data={allocationData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={25} outerRadius={40}>
                                     {allocationData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                 </Pie>
-                                <Tooltip formatter={(value) => formatCurrency(Number(value))} contentStyle={{ backgroundColor: '#1e1e1e', border: '1px solid #3a3a3a', borderRadius: '0.5rem' }} />
+                                <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ backgroundColor: '#1e1e1e', border: '1px solid #3a3a3a', borderRadius: '0.5rem' }} />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
@@ -303,15 +240,10 @@ const Dashboard: React.FC = () => {
                 <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={portfolioHistoryData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                            <defs>
-                                <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#00C49F" stopOpacity={0.8}/>
-                                    <stop offset="95%" stopColor="#00C49F" stopOpacity={0}/>
-                                </linearGradient>
-                            </defs>
+                            <defs><linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#00C49F" stopOpacity={0.8}/><stop offset="95%" stopColor="#00C49F" stopOpacity={0}/></linearGradient></defs>
                             <XAxis dataKey="date" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
-                            <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => formatCurrency(Number(value))}/>
-                            <Tooltip content={<CustomTooltip />} />
+                            <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value: number) => formatCurrency(value, { notation: 'compact', maximumFractionDigits: 1 })}/>
+                            <Tooltip content={<CustomTooltip formatter={(v: number) => formatCurrency(v)} />} />
                             <Area type="monotone" dataKey="value" stroke="#00C49F" fillOpacity={1} fill="url(#colorValue)" />
                         </AreaChart>
                     </ResponsiveContainer>
@@ -329,7 +261,7 @@ const Dashboard: React.FC = () => {
                             <BarChart data={spendingByCategoryThisMonth.slice(0, 5)} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                                 <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" width={80} stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
-                                <Tooltip cursor={{fill: 'rgba(107, 114, 128, 0.1)'}} contentStyle={{ backgroundColor: '#1e1e1e', border: '1px solid #3a3a3a', borderRadius: '0.5rem' }} formatter={(value) => formatCurrency(Number(value))} />
+                                <Tooltip cursor={{fill: 'rgba(107, 114, 128, 0.1)'}} contentStyle={{ backgroundColor: '#1e1e1e', border: '1px solid #3a3a3a', borderRadius: '0.5rem' }} formatter={(value: number) => formatCurrency(value)} />
                                 <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
                                     {spendingByCategoryThisMonth.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                 </Bar>

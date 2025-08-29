@@ -1,31 +1,29 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { useApiKey } from '../hooks/useApiKey';
+import { useGeminiApiKey } from '../hooks/useApiKey';
 import Card from '../components/Card';
 import { LogoIcon, SparklesIcon } from '../components/Icons';
 import { Html5Qrcode } from 'html5-qrcode';
 
 const LoginPage: React.FC = () => {
     const [name, setName] = useState('');
-    const [apiKeyInput, setApiKeyInput] = useState('');
+    const [geminiApiKeyInput, setGeminiApiKeyInput] = useState('');
     const [mode, setMode] = useState<'create' | 'scan'>('create');
     const [scanError, setScanError] = useState<string | null>(null);
     
     const { createUserAndLogin, isAuthenticated } = useAuth();
-    const { saveApiKey } = useApiKey();
+    const { saveApiKey: saveGeminiApiKey } = useGeminiApiKey();
 
     const scannerRef = useRef<Html5Qrcode | null>(null);
 
     const onScanSuccess = useCallback((decodedText: string) => {
         try {
-            // Basic validation to ensure it looks like our sync link
             const url = new URL(decodedText);
             if (url.hash.includes('/sync/')) {
                 if (scannerRef.current?.isScanning) {
                     scannerRef.current.stop();
                 }
-                // Redirect to the sync page to handle the P2P connection
                 window.location.href = decodedText;
             } else {
                 setScanError("Invalid QR code. Please scan a valid FinTrack AI sync code.");
@@ -37,16 +35,13 @@ const LoginPage: React.FC = () => {
     
     const startScanner = useCallback(() => {
         setScanError(null);
-        if (scannerRef.current && scannerRef.current.isScanning) {
-            return;
-        }
+        if (scannerRef.current && scannerRef.current.isScanning) return;
+        
         const scanner = new Html5Qrcode('qr-reader');
         scannerRef.current = scanner;
         const config = { fps: 5, qrbox: { width: 250, height: 250 }, supportedScanTypes: [] };
 
-        scanner.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {
-            // This callback is for scan failures, which we can ignore as it's often noisy.
-        })
+        scanner.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {})
         .catch(err => {
             setScanError(`Camera Error: ${err}. Please ensure camera permissions are enabled for this site.`);
         });
@@ -65,8 +60,8 @@ const LoginPage: React.FC = () => {
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (name.trim() && apiKeyInput.trim()) {
-            saveApiKey(apiKeyInput.trim());
+        if (name.trim() && geminiApiKeyInput.trim()) {
+            saveGeminiApiKey(geminiApiKeyInput.trim());
             createUserAndLogin(name.trim());
         }
     };
@@ -92,29 +87,23 @@ const LoginPage: React.FC = () => {
                     <Card>
                         <h2 className="text-xl font-bold text-center text-text-primary mb-2">Get Started</h2>
                         <p className="text-sm text-text-secondary text-center mb-6">
-                            FinTrack AI runs entirely on your device. Your financial data is never sent to a server. Enter your details to begin.
+                            FinTrack AI runs entirely on your device. Your financial data is never sent to a server.
                         </p>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
-                                <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-1">
-                                    Name or Nickname
-                                </label>
+                                <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-1">Name or Nickname</label>
                                 <input id="name" type="text" required value={name} onChange={(e) => setName(e.target.value)}
                                     className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
                                     placeholder="e.g., Alex's Finances" />
                             </div>
                             <div>
-                                <label htmlFor="api-key" className="block text-sm font-medium text-text-secondary mb-1">
-                                    Google Gemini API Key
-                                </label>
-                                <input id="api-key" type="password" required value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)}
+                                <label htmlFor="gemini-api-key" className="block text-sm font-medium text-text-secondary mb-1">Google Gemini API Key</label>
+                                <input id="gemini-api-key" type="password" required value={geminiApiKeyInput} onChange={(e) => setGeminiApiKeyInput(e.target.value)}
                                     className="w-full bg-primary border border-secondary rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
-                                    placeholder="Enter your API key" />
-                                <p className="text-xs text-text-secondary mt-1.5">
-                                    You can get a free key from Google AI Studio.
-                                </p>
+                                    placeholder="For AI features" />
+                                <p className="text-xs text-text-secondary mt-1.5">Get a free key from Google AI Studio.</p>
                             </div>
-                            <button type="submit" disabled={!name.trim() || !apiKeyInput.trim()}
+                            <button type="submit" disabled={!name.trim() || !geminiApiKeyInput.trim()}
                                 className="w-full bg-accent text-white font-semibold py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">
                                 Start Tracking
                             </button>

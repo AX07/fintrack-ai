@@ -3,16 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Peer } from 'peerjs';
 import pako from 'pako';
 import { useAuth } from '../hooks/useAuth';
-import { useApiKey } from '../hooks/useApiKey';
+import { useGeminiApiKey } from '../hooks/useApiKey';
 import { fromV2Format } from '../utils/sync';
 import Card from '../components/Card';
 import { LogoIcon, SparklesIcon } from '../components/Icons';
+import { SyncPayload, defaultTransactionCategories } from '../types';
 
 const SyncPage: React.FC = () => {
     const { peerId } = useParams<{ peerId: string }>();
     const navigate = useNavigate();
     const { login } = useAuth();
-    const { saveApiKey } = useApiKey();
+    const { saveApiKey: saveGeminiApiKey } = useGeminiApiKey();
     
     const [status, setStatus] = useState('Initializing...');
     const peerRef = useRef<Peer | null>(null);
@@ -47,13 +48,31 @@ const SyncPage: React.FC = () => {
                     try {
                         const compressedData = data as Uint8Array;
                         const jsonString = pako.inflate(compressedData, { to: 'string' });
-                        const compactPayload = JSON.parse(jsonString);
-                        const payload = fromV2Format(compactPayload);
+                        const receivedData = JSON.parse(jsonString);
+                        let payload: SyncPayload | null = null;
+                        
+                        if (receivedData.v === 2) {
+                            payload = fromV2Format(receivedData);
+                        } else if (receivedData.user && receivedData.financeData) { // Legacy V1
+                            payload = {
+                                user: receivedData.user,
+                                financeData: {
+                                    settings: receivedData.financeData.settings || { displayCurrency: 'USD' },
+                                    transactions: receivedData.financeData.transactions || [],
+                                    accounts: receivedData.financeData.accounts || [],
+                                    conversationHistory: receivedData.financeData.conversationHistory || [],
+                                    transactionCategories: receivedData.financeData.transactionCategories || defaultTransactionCategories,
+                                    lastUpdated: receivedData.financeData.lastUpdated || new Date().toISOString(),
+                                    // FIX: Add missing 'aiProcessingStatus' property to conform to FinanceData type.
+                                    aiProcessingStatus: { isProcessing: false, message: '' },
+                                },
+                                geminiApiKey: receivedData.geminiApiKey || receivedData.apiKey || null, // Legacy used 'apiKey'
+                            };
+                        }
 
                         if (payload && payload.user && payload.financeData) {
-                            if (payload.apiKey) {
-                                saveApiKey(payload.apiKey);
-                            }
+                            if (payload.geminiApiKey) saveGeminiApiKey(payload.geminiApiKey);
+                            
                             login(payload.user, payload.financeData);
                             setStatus('Sync complete! Welcome back.');
                             setTimeout(() => navigate('/dashboard'), 1500);
@@ -75,7 +94,6 @@ const SyncPage: React.FC = () => {
                 });
 
                 conn.on('close', () => {
-                    // Only show this message if we haven't already finished or errored
                     if (status.includes('...')) {
                        setStatus('The connection was closed. Please try again.');
                     }
@@ -94,7 +112,7 @@ const SyncPage: React.FC = () => {
 
         return () => cleanupPeer();
 
-    }, [peerId, login, navigate, saveApiKey]);
+    }, [peerId, login, navigate, saveGeminiApiKey]);
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-text-primary">

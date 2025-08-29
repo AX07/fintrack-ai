@@ -15,6 +15,7 @@ const AppContainer: React.FC = () => {
   // By providing a key that changes when the user logs in or out, we force
   // the FinanceProvider and the entire App to re-mount. This is the cleanest
   // way to ensure all state is reset and the correct user's data is loaded.
+  // The FinanceProvider now also contains the CurrencyProvider logic.
   return (
     <FinanceProvider key={user ? user.id : 'logged_out'}>
       <App />

@@ -1,7 +1,8 @@
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { LogoIcon, BellIcon, MenuIcon, SparklesIcon } from './Icons';
+import { LogoIcon, MenuIcon, SparklesIcon } from './Icons';
 import { useAuth } from '../hooks/useAuth';
+import NotificationCatcher from './NotificationCatcher';
 
 const navLinks = [
   { name: 'Dashboard', path: '/dashboard' },
@@ -57,9 +58,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             </div>
           </div>
           <div className="flex items-center">
-            <button className="p-1 rounded-full text-text-secondary hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-accent">
-              <BellIcon className="h-6 w-6" />
-            </button>
+            <NotificationCatcher />
             <Link to="/profile" className="ml-3 relative">
               <img className="h-8 w-8 rounded-full" src={user?.avatar} alt="User" />
             </Link>

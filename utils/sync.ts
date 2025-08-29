@@ -17,7 +17,9 @@ export const toV2Format = (data: SyncPayload) => {
             h.name,
             h.ticker || null,
             h.quantity,
-            h.value
+            h.price,
+            h.value,
+            h.apiId || null,
         ]) || [];
         return [
             a.id,
@@ -30,6 +32,7 @@ export const toV2Format = (data: SyncPayload) => {
     });
 
     const compactFinanceData = {
+        s: data.financeData.settings,
         t: compactTransactions,
         a: compactAccounts,
         tc: data.financeData.transactionCategories,
@@ -37,9 +40,10 @@ export const toV2Format = (data: SyncPayload) => {
     };
     
     return {
+        v: 2, // Version identifier
         u: data.user,
-        d: compactFinanceData, // d for data
-        k: data.apiKey,       // k for key
+        d: compactFinanceData,
+        gK: data.geminiApiKey, // gK for Gemini Key
     };
 };
 
@@ -61,7 +65,9 @@ export const fromV2Format = (compactData: any): SyncPayload | null => {
                 name: h[1],
                 ticker: h[2] || undefined,
                 quantity: h[3],
-                value: h[4],
+                price: h[4],
+                value: h[5],
+                apiId: h[6] || undefined,
             }));
             return {
                 id: a[0],
@@ -74,17 +80,20 @@ export const fromV2Format = (compactData: any): SyncPayload | null => {
         });
 
         const financeData: FinanceData = {
+            settings: compactData.d.s || { displayCurrency: 'USD' },
             transactions,
             accounts,
             transactionCategories: compactData.d.tc,
             lastUpdated: compactData.d.lu,
             conversationHistory: [], // History is not synced
+            // FIX: Add missing 'aiProcessingStatus' property to conform to FinanceData type.
+            aiProcessingStatus: { isProcessing: false, message: '' },
         };
 
         return {
             user: compactData.u,
             financeData: financeData,
-            apiKey: compactData.k || null,
+            geminiApiKey: compactData.gK || null,
         };
     } catch (error) {
         console.error("Failed to parse V2 compact data format", error);
