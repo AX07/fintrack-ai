@@ -34,10 +34,10 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             <div className="flex-shrink-0">
               <div className="flex flex-col items-center">
                 <a href="https://www.cryptoax07.com/" target="_blank" rel="noopener noreferrer">
-                  <img src="https://static.wixstatic.com/media/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png/v1/fill/w_958,h_360,al_c,lg_1,q_85,enc_avif,quality_auto/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png" alt="Company Logo" className="h-12 object-contain mb-1" />
+                  <img src="https://static.wixstatic.com/media/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png/v1/fill/w_958,h_360,al_c,lg_1,q_85,enc_avif,quality_auto/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png" alt="Company Logo" className="h-8 object-contain mb-1" />
                 </a>
                 <NavLink to="/" className="flex items-center space-x-2">
-                  <LogoIcon className="h-8 w-8 text-accent" />
+                  <LogoIcon className="h-6 w-6 text-accent" />
                   <span className="text-xl font-bold text-text-primary hidden sm:block">FinTrack</span>
                 </NavLink>
               </div>
