@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { LogoIcon, MenuIcon, SparklesIcon } from './Icons';
@@ -31,10 +32,15 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
               <MenuIcon className="block h-6 w-6" />
             </button>
             <div className="flex-shrink-0">
-              <NavLink to="/" className="flex items-center space-x-2">
-                <LogoIcon className="h-8 w-8 text-accent" />
-                <span className="text-xl font-bold text-text-primary hidden sm:block">FinTrack</span>
-              </NavLink>
+              <div className="flex flex-col items-center">
+                <a href="https://www.cryptoax07.com/" target="_blank" rel="noopener noreferrer">
+                  <img src="https://static.wixstatic.com/media/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png/v1/fill/w_958,h_360,al_c,lg_1,q_85,enc_avif,quality_auto/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png" alt="Company Logo" className="h-12 object-contain mb-1" />
+                </a>
+                <NavLink to="/" className="flex items-center space-x-2">
+                  <LogoIcon className="h-8 w-8 text-accent" />
+                  <span className="text-xl font-bold text-text-primary hidden sm:block">FinTrack</span>
+                </NavLink>
+              </div>
             </div>
             <div className="hidden md:block">
               <div className="ml-10 flex items-baseline space-x-4">

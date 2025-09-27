@@ -139,8 +139,6 @@ const ExplorePage: React.FC = () => {
         setAssetToAdd(null);
     };
     
-    const AssetCardWithCurrency = (props: { asset: MarketAsset }) => <AssetCard {...props} onAdd={setAssetToAdd} formatCurrency={formatCurrency} />;
-
     return (
         <div className="space-y-8">
             {assetToAdd && <AddAssetModal asset={assetToAdd} accounts={accounts} onClose={() => setAssetToAdd(null)} onConfirm={handleAddAsset} formatCurrency={formatCurrency} />}
@@ -161,7 +159,8 @@ const ExplorePage: React.FC = () => {
                 
                 {searchResults.length > 0 && (
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {searchResults.map(asset => <AssetCardWithCurrency key={asset.apiId} asset={asset} />)}
+                        {/* FIX: Removed the inefficient `AssetCardWithCurrency` wrapper and used `AssetCard` directly, passing the required props to fix the key prop error. */}
+                        {searchResults.map(asset => <AssetCard key={asset.apiId} asset={asset} onAdd={setAssetToAdd} formatCurrency={formatCurrency} />)}
                     </div>
                 )}
                 
@@ -170,15 +169,17 @@ const ExplorePage: React.FC = () => {
                         <div>
                             <h2 className="text-2xl font-bold mb-4">Trending Assets</h2>
                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {/* FIX: Replaced wrapper component with direct usage of `AssetCard`. */}
                                 {isLoading ? Array(3).fill(0).map((_, i) => <Card key={i} className="h-40 animate-pulse">{null}</Card>) 
-                                           : trending.map(asset => <AssetCardWithCurrency key={asset.apiId} asset={asset} />)}
+                                           : trending.map(asset => <AssetCard key={asset.apiId} asset={asset} onAdd={setAssetToAdd} formatCurrency={formatCurrency} />)}
                             </div>
                         </div>
                         <div>
                              <h2 className="text-2xl font-bold mb-4">Top Movers (24h)</h2>
                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {/* FIX: Replaced wrapper component with direct usage of `AssetCard`. */}
                                 {isLoading ? Array(3).fill(0).map((_, i) => <Card key={i} className="h-40 animate-pulse">{null}</Card>) 
-                                           : topMovers.map(asset => <AssetCardWithCurrency key={asset.apiId} asset={asset} />)}
+                                           : topMovers.map(asset => <AssetCard key={asset.apiId} asset={asset} onAdd={setAssetToAdd} formatCurrency={formatCurrency} />)}
                             </div>
                         </div>
                     </div>

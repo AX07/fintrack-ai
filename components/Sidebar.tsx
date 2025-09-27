@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { LogoIcon, DashboardIcon, SpendingIcon, AssetsIcon, AIAssistantIcon, LogOutIcon } from './Icons';
@@ -32,12 +31,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       <aside className={`fixed top-0 left-0 z-40 w-64 h-full bg-surface border-r border-secondary flex-shrink-0 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 flex flex-col h-full">
           {/* Logo and Title */}
-          <div className="flex items-center gap-3 mb-10">
-            <LogoIcon className="h-8 w-8 text-accent" />
-            <div>
-              <h1 className="text-lg font-bold text-text-primary">FinTrack AI</h1>
-              <p className="text-xs text-text-secondary">Smart Finance Manager</p>
-            </div>
+          <div className="flex flex-col items-center gap-2 mb-8">
+            <a href="https://www.cryptoax07.com/" target="_blank" rel="noopener noreferrer">
+              <img src="https://static.wixstatic.com/media/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png/v1/fill/w_958,h_360,al_c,lg_1,q_85,enc_avif,quality_auto/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png" alt="Company Logo" className="w-48 object-contain" />
+            </a>
+            <Link to="/dashboard" className="flex items-center gap-3">
+              <LogoIcon className="h-8 w-8 text-accent" />
+              <div>
+                <h1 className="text-lg font-bold text-text-primary">FinTrack AI</h1>
+                <p className="text-xs text-text-secondary">Smart Finance Manager</p>
+              </div>
+            </Link>
           </div>
 
           {/* Navigation */}

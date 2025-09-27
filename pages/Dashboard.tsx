@@ -190,7 +190,14 @@ const Dashboard: React.FC = () => {
     if (transactions.length === 0 && accounts.length === 0) {
         return (
             <EmptyState
-                icon={<LogoIcon className="w-8 h-8" />}
+                icon={
+                    <div className="flex flex-col items-center gap-2">
+                        <a href="https://www.cryptoax07.com/" target="_blank" rel="noopener noreferrer">
+                          <img src="https://static.wixstatic.com/media/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png/v1/fill/w_958,h_360,al_c,lg_1,q_85,enc_avif,quality_auto/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png" alt="Company Logo" className="w-48 object-contain" />
+                        </a>
+                        <LogoIcon className="w-8 h-8" />
+                    </div>
+                }
                 title="Welcome to FinTrack AI"
                 message="Your dashboard is empty. Get started by adding a transaction or uploading a bank statement in the AI Agent tab."
                 action={<Link to="/ai" className="bg-accent text-white font-semibold py-2 px-4 rounded-lg hover:opacity-90">Go to AI Agent</Link>}

@@ -3,10 +3,10 @@
 import React from 'react';
 
 export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 17l6-6 4 4 8-8" />
-    <path d="M17 17h6v-6" />
-  </svg>
+    <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 17l6-6 4 4 8-8" />
+      <path d="M17 17h6v-6" />
+    </svg>
 );
 
 export const DashboardIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (

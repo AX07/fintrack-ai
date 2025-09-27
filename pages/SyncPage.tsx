@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Peer } from 'peerjs';
@@ -117,9 +118,14 @@ const SyncPage: React.FC = () => {
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-text-primary">
             <Card className="w-full max-w-md text-center">
-                <div className="flex justify-center items-center gap-3 mb-4">
-                    <LogoIcon className="h-10 w-10 text-accent" />
-                    <h1 className="text-3xl font-bold">FinTrack AI</h1>
+                <div className="flex flex-col justify-center items-center gap-2 mb-4">
+                    <a href="https://www.cryptoax07.com/" target="_blank" rel="noopener noreferrer">
+                      <img src="https://static.wixstatic.com/media/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png/v1/fill/w_958,h_360,al_c,lg_1,q_85,enc_avif,quality_auto/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png" alt="Company Logo" className="w-64 object-contain" />
+                    </a>
+                    <div className="flex justify-center items-center gap-3">
+                        <LogoIcon className="h-10 w-10 text-accent" />
+                        <h1 className="text-3xl font-bold">FinTrack AI</h1>
+                    </div>
                 </div>
                 <h2 className="text-xl font-semibold mb-6">Device Sync in Progress</h2>
                 <div className="flex justify-center items-center space-x-2 my-4 p-4 bg-primary rounded-lg">

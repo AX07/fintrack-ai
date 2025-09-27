@@ -87,11 +87,13 @@ const SpendingPage: React.FC = () => {
             
             if (similarTransactions.length > 0 && originalTransaction.category !== newCategory) {
                 setUpdateModal({ isOpen: true, originalTransaction, newCategory, similarTransactions });
-                setEditedTransactions(prev => ({ ...prev, [id]: { ...prev[id], category: newCategory } }));
+                // FIX: Prevent "Spread types may only be created from object types" error by providing a default empty object for prev[id].
+                setEditedTransactions(prev => ({ ...prev, [id]: { ...(prev[id] || {}), category: newCategory } }));
                 return; 
             }
         }
-        setEditedTransactions(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+        // FIX: Prevent "Spread types may only be created from object types" error by providing a default empty object for prev[id].
+        setEditedTransactions(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: value } }));
     };
 
     const handleDeleteTransaction = (transactionId: string) => deleteTransaction({ transactionId });

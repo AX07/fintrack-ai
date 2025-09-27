@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -73,9 +74,14 @@ const LoginPage: React.FC = () => {
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
             <div className="text-center mb-8">
-                <div className="flex justify-center items-center gap-3 mb-4">
-                    <LogoIcon className="h-12 w-12 text-accent" />
-                    <h1 className="text-4xl font-bold text-text-primary">FinTrack AI</h1>
+                <div className="flex flex-col justify-center items-center gap-2 mb-4">
+                    <a href="https://www.cryptoax07.com/" target="_blank" rel="noopener noreferrer">
+                      <img src="https://static.wixstatic.com/media/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png/v1/fill/w_958,h_360,al_c,lg_1,q_85,enc_avif,quality_auto/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png" alt="Company Logo" className="w-80 object-contain" />
+                    </a>
+                    <div className="flex justify-center items-center gap-3">
+                        <LogoIcon className="h-12 w-12 text-accent" />
+                        <h1 className="text-4xl font-bold text-text-primary">FinTrack AI</h1>
+                    </div>
                 </div>
                 <p className="text-lg text-text-secondary max-w-xl mx-auto">
                     Your intelligent, private, and local-first financial dashboard.

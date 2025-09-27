@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -67,13 +66,15 @@ const AssetsPage: React.FC = () => {
     const handleEditToggle = () => {
         if (isEditing) {
             Object.entries(editedValues).forEach(([accountId, changes]) => {
-                if (Object.keys(changes).length > 0) {
+                // FIX: Add type assertion for `changes` as TypeScript fails to infer it correctly from Object.entries.
+                const typedChanges = changes as { name?: string; balance?: number };
+                if (Object.keys(typedChanges).length > 0) {
                     const originalAccount = accounts.find(a => a.id === accountId);
                     if (!originalAccount) return;
                     
                     const updatedData: Partial<Account> = {};
-                    if(changes.name && changes.name.trim() && changes.name !== originalAccount.name) updatedData.name = changes.name.trim();
-                    if(changes.balance !== undefined && changes.balance !== originalAccount.balance) updatedData.balance = changes.balance;
+                    if(typedChanges.name && typedChanges.name.trim() && typedChanges.name !== originalAccount.name) updatedData.name = typedChanges.name.trim();
+                    if(typedChanges.balance !== undefined && typedChanges.balance !== originalAccount.balance) updatedData.balance = typedChanges.balance;
 
                     if(Object.keys(updatedData).length > 0) updateAccount({ id: accountId, data: updatedData });
                 }
@@ -84,7 +85,8 @@ const AssetsPage: React.FC = () => {
     };
 
     const handleValueChange = (accountId: string, field: 'name' | 'balance', value: string | number) => {
-        setEditedValues(prev => ({ ...prev, [accountId]: { ...prev[accountId], [field]: value } }));
+        // FIX: Ensure prev[accountId] is an object before spreading to avoid "Spread types may only be created from object types" error.
+        setEditedValues(prev => ({ ...prev, [accountId]: { ...(prev[accountId] || {}), [field]: value } }));
     };
 
     const handleDeleteAccount = (accountId: string, accountName: string) => {
@@ -148,7 +150,8 @@ const AssetsPage: React.FC = () => {
         </div>
 
         {Object.keys(accountsByCategory).length > 0 ? Object.entries(accountsByCategory).map(([category, accts]) => {
-            const categoryTotal = accts.reduce((sum, acc) => sum + acc.balance, 0);
+            // FIX: Add type assertion for `accts` because TS fails to infer it from Object.entries, causing a 'reduce is not a function' error.
+            const categoryTotal = (accts as Account[]).reduce((sum, acc) => sum + acc.balance, 0);
             return (
                 <div key={category} className="space-y-4">
                     <div className="flex justify-between items-baseline px-2">
@@ -156,7 +159,8 @@ const AssetsPage: React.FC = () => {
                         <span className="font-semibold text-lg text-text-secondary">{formatCurrency(categoryTotal)}</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {accts.map(account => (
+                        {/* FIX: Add type assertion for `accts` to fix 'map is not a function' error. */}
+                        {(accts as Account[]).map(account => (
                             <Card key={account.id} className="relative flex flex-col justify-between">
                                 {isEditing ? (
                                     <div>
