@@ -1,16 +1,8 @@
-
 import React from 'react';
-import { NavLink, Link } from 'react-router-dom';
-import { LogoIcon, MenuIcon, SparklesIcon } from './Icons';
+import { Link } from 'react-router-dom';
+import { MenuIcon } from './Icons';
 import { useAuth } from '../hooks/useAuth';
 import NotificationCatcher from './NotificationCatcher';
-
-const navLinks = [
-  { name: 'Dashboard', path: '/dashboard' },
-  { name: 'Spending', path: '/spending' },
-  { name: 'Assets', path: '/assets' },
-  { name: 'AI Agent', path: '/ai' },
-];
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -26,41 +18,15 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           <div className="flex items-center">
             <button
               onClick={onMenuClick}
-              className="md:hidden mr-2 p-2 rounded-md text-text-secondary hover:text-text-primary hover:bg-secondary focus:outline-none"
+              className="md:hidden mr-4 p-2 rounded-md text-text-secondary hover:text-text-primary hover:bg-secondary focus:outline-none"
               aria-label="Open sidebar"
             >
               <MenuIcon className="block h-6 w-6" />
             </button>
-            <div className="flex-shrink-0">
-              <div className="flex flex-col items-center">
-                <a href="https://www.cryptoax07.com/" target="_blank" rel="noopener noreferrer">
-                  <img src="https://static.wixstatic.com/media/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png/v1/fill/w_958,h_360,al_c,lg_1,q_85,enc_avif,quality_auto/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png" alt="Company Logo" className="h-8 object-contain mb-1" />
-                </a>
-                <NavLink to="/" className="flex items-center space-x-2">
-                  <LogoIcon className="h-6 w-6 text-accent" />
-                  <span className="text-xl font-bold text-text-primary hidden sm:block">FinTrack</span>
-                </NavLink>
-              </div>
-            </div>
-            <div className="hidden md:block">
-              <div className="ml-10 flex items-baseline space-x-4">
-                {navLinks.map((link) => (
-                  <NavLink
-                    key={link.name}
-                    to={link.path}
-                    className={({ isActive }) =>
-                      `px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
-                        isActive
-                          ? 'bg-primary text-text-primary'
-                          : 'text-text-secondary hover:bg-secondary hover:text-text-primary'
-                      }`
-                    }
-                  >
-                    {link.name === 'AI Agent' && <SparklesIcon className="w-4 h-4 text-accent" />}
-                    {link.name}
-                  </NavLink>
-                ))}
-              </div>
+            <div className="flex-shrink-0 md:hidden">
+              <a href="https://www.cryptoax07.com/" target="_blank" rel="noopener noreferrer">
+                <img src="https://static.wixstatic.com/media/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png/v1/fill/w_958,h_360,al_c,lg_1,q_85,enc_avif,quality_auto/4a78c1_0ce55f39403f46ccbe0ef5e7f6c799f3~mv2.png" alt="Company Logo" className="h-10 object-contain" />
+              </a>
             </div>
           </div>
           <div className="flex items-center">

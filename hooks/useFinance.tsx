@@ -5,7 +5,7 @@ import { fetchExchangeRates } from '../services/marketDataService';
 
 // MOCK DATA for a clean slate
 const initialData: FinanceData = {
-    settings: { displayCurrency: 'USD' },
+    settings: { displayCurrency: 'USD', budgets: {} },
     transactions: [],
     accounts: [],
     conversationHistory: [],
@@ -33,6 +33,8 @@ type Action =
     | { type: 'UPDATE_HOLDING_PRICES', payload: { accountId: string, holdingId: string, price: number }[] }
     | { type: 'REMOVE_HOLDING', payload: { accountId: string, holdingId: string } }
     | { type: 'UPDATE_SETTINGS', payload: Partial<Settings> }
+    | { type: 'SET_BUDGET', payload: { category: TransactionCategory, amount: number } }
+    | { type: 'REMOVE_BUDGET', payload: { category: TransactionCategory } }
     | { type: 'SET_DATA', payload: FinanceData }
     | { type: 'SET_PENDING_AI_FILE', payload: File | null }
     | { type: 'SET_AI_PROCESSING_STATUS', payload: { isProcessing: boolean, message: string } }
@@ -73,6 +75,8 @@ interface FinanceContextType extends FinanceData {
     updateHoldingPrices: (payload: { accountId: string, holdingId: string, price: number }[]) => void;
     removeHolding: (payload: { accountId: string, holdingId: string }) => void;
     updateSettings: (settings: Partial<Settings>) => void;
+    setBudget: (payload: { category: TransactionCategory; amount: number }) => void;
+    removeBudget: (payload: { category: TransactionCategory }) => void;
     setData: (data: FinanceData) => void;
     setPendingFileForAI: (file: File | null) => void;
     setAiProcessingStatus: (status: { isProcessing: boolean; message: string }) => void;
@@ -304,6 +308,24 @@ const financeReducer = (state: FinanceData, action: Action): FinanceData => {
         }
         case 'UPDATE_SETTINGS':
             return { ...state, settings: { ...state.settings, ...action.payload }, lastUpdated: new Date().toISOString() };
+        case 'SET_BUDGET':
+            return {
+                ...state,
+                settings: {
+                    ...state.settings,
+                    budgets: { ...state.settings.budgets, [action.payload.category]: action.payload.amount },
+                },
+                lastUpdated: new Date().toISOString()
+            };
+        case 'REMOVE_BUDGET': {
+            const newBudgets = { ...state.settings.budgets };
+            delete newBudgets[action.payload.category];
+            return {
+                ...state,
+                settings: { ...state.settings, budgets: newBudgets },
+                lastUpdated: new Date().toISOString()
+            };
+        }
         case 'SET_PENDING_AI_FILE':
             return { ...state, pendingFileForAI: action.payload };
         case 'SET_AI_PROCESSING_STATUS':
@@ -452,6 +474,8 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     const updateHoldingPrices = (payload: { accountId: string, holdingId: string, price: number }[]) => dispatch({ type: 'UPDATE_HOLDING_PRICES', payload });
     const removeHolding = (payload: { accountId: string, holdingId: string }) => dispatch({ type: 'REMOVE_HOLDING', payload });
     const updateSettings = (settings: Partial<Settings>) => dispatch({ type: 'UPDATE_SETTINGS', payload: settings });
+    const setBudget = (payload: { category: TransactionCategory, amount: number }) => dispatch({ type: 'SET_BUDGET', payload });
+    const removeBudget = (payload: { category: TransactionCategory }) => dispatch({ type: 'REMOVE_BUDGET', payload });
     const setData = (data: FinanceData) => dispatch({ type: 'SET_DATA', payload: data });
     const setPendingFileForAI = (file: File | null) => dispatch({ type: 'SET_PENDING_AI_FILE', payload: file });
     const setAiProcessingStatus = (status: { isProcessing: boolean; message: string }) => dispatch({ type: 'SET_AI_PROCESSING_STATUS', payload: status });
@@ -463,7 +487,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
     
     const currencyValue = { formatCurrency, convertFromUSD, convertToUSD, displayCurrency: state.settings.displayCurrency, exchangeRates };
-    const financeValue: FinanceContextType = { ...state, addTransaction, addMultipleTransactions, addAccounts, addConversation, addTransactionCategory, renameAccount, mergeAccounts, updateTransaction, updateTransactionsCategory, deleteTransaction, updateAccount, deleteAccount, addHolding, updateHolding, updateHoldingPrices, removeHolding, updateSettings, setData, setPendingFileForAI, setAiProcessingStatus, clearAllData, formatCurrency };
+    const financeValue: FinanceContextType = { ...state, addTransaction, addMultipleTransactions, addAccounts, addConversation, addTransactionCategory, renameAccount, mergeAccounts, updateTransaction, updateTransactionsCategory, deleteTransaction, updateAccount, deleteAccount, addHolding, updateHolding, updateHoldingPrices, removeHolding, updateSettings, setBudget, removeBudget, setData, setPendingFileForAI, setAiProcessingStatus, clearAllData, formatCurrency };
 
     return (
         <FinanceContext.Provider value={financeValue}>

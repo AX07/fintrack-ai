@@ -4,6 +4,7 @@ export type Currency = 'USD' | 'EUR' | 'GBP';
 
 export interface Settings {
     displayCurrency: Currency;
+    budgets: Record<TransactionCategory, number>;
 }
 
 export interface User {

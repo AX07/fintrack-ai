@@ -85,7 +85,7 @@ const AssetsPage: React.FC = () => {
     };
 
     const handleValueChange = (accountId: string, field: 'name' | 'balance', value: string | number) => {
-        // FIX: Ensure prev[accountId] is an object before spreading to avoid "Spread types may only be created from object types" error.
+        // FIX: `prev[accountId]` can be undefined. Spreading an undefined value throws an error. Provide a fallback empty object.
         setEditedValues(prev => ({ ...prev, [accountId]: { ...(prev[accountId] || {}), [field]: value } }));
     };
 

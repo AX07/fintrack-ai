@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import Card from '../components/Card';
 import { useFinance, useCurrency } from '../hooks/useFinance';
 import { Transaction, TransactionCategory } from '../types';
@@ -9,9 +9,34 @@ const CategoryPill: React.FC<{ category: string }> = ({ category }) => (
     <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-secondary text-text-secondary">{category}</span>
 );
 
+const ProgressBar: React.FC<{ spent: number; budget: number }> = ({ spent, budget }) => {
+    const percentage = budget > 0 ? (spent / budget) * 100 : 0;
+    const displayPercentage = Math.min(percentage, 100);
+
+    let barColor = 'bg-accent';
+    if (percentage >= 95) {
+        barColor = 'bg-negative';
+    } else if (percentage >= 75) {
+        barColor = 'bg-warning';
+    }
+    
+    return (
+        <div className="w-full bg-primary rounded-full h-2.5">
+            <div 
+                className={`${barColor} h-2.5 rounded-full transition-all duration-500`} 
+                style={{ width: `${displayPercentage}%` }}
+                aria-valuenow={percentage}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                role="progressbar"
+            ></div>
+        </div>
+    );
+};
+
 const SpendingPage: React.FC = () => {
-    const { transactions, accounts, updateTransaction, deleteTransaction, updateTransactionsCategory, transactionCategories, addTransactionCategory } = useFinance();
-    const { formatCurrency } = useCurrency();
+    const { transactions, accounts, updateTransaction, deleteTransaction, updateTransactionsCategory, transactionCategories, addTransactionCategory, settings, setBudget, removeBudget } = useFinance();
+    const { formatCurrency, convertToUSD, convertFromUSD, displayCurrency } = useCurrency();
     const [activeTab, setActiveTab] = useState('All');
     const [isEditing, setIsEditing] = useState(false);
     const [editedTransactions, setEditedTransactions] = useState<Record<string, Partial<Transaction>>>({});
@@ -27,18 +52,28 @@ const SpendingPage: React.FC = () => {
         newCategory: TransactionCategory;
         similarTransactions: Transaction[];
     } | null>(null);
+    
+    const [isEditingBudgets, setIsEditingBudgets] = useState(false);
+    const [editedBudgets, setEditedBudgets] = useState<Record<TransactionCategory, string>>({});
 
     const bankAccounts = useMemo(() => 
         accounts.filter(acc => acc.category === 'Bank Accounts'), 
     [accounts]);
 
-    const totalSpentThisMonth = useMemo(() => {
+    const spendingThisMonthByCategory = useMemo(() => {
         const now = new Date();
         const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         return transactions
             .filter(t => t.amount < 0 && new Date(t.date) >= firstDayOfMonth)
-            .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+            .reduce((acc, t) => {
+                acc[t.category] = (acc[t.category] || 0) + Math.abs(t.amount);
+                return acc;
+            }, {} as Record<string, number>);
     }, [transactions]);
+
+    const totalSpentThisMonth = useMemo(() => {
+        return Object.values(spendingThisMonthByCategory).reduce((sum, amount) => sum + amount, 0);
+    }, [spendingThisMonthByCategory]);
 
     const spendingByCategory = transactions
         .filter(t => t.amount < 0)
@@ -52,6 +87,34 @@ const SpendingPage: React.FC = () => {
     const spendingChartData = Object.entries(spendingByCategory)
         .map(([name, data]) => ({ name, value: data.value, count: data.count }))
         .sort((a, b) => b.value - a.value);
+        
+    const monthlySpendingTrendData = useMemo(() => {
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        sixMonthsAgo.setDate(1);
+        sixMonthsAgo.setHours(0, 0, 0, 0);
+
+        const recentSpending = transactions.filter(t => t.amount < 0 && new Date(t.date) >= sixMonthsAgo);
+        const monthlyData: Record<string, Record<string, number>> = {};
+        
+        recentSpending.forEach(t => {
+            const date = new Date(t.date);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}`;
+            if (!monthlyData[monthKey]) monthlyData[monthKey] = {};
+            monthlyData[monthKey][t.category] = (monthlyData[monthKey][t.category] || 0) + Math.abs(t.amount);
+        });
+
+        const categories = [...new Set(recentSpending.map(t => t.category))].sort();
+        const chartData = Object.keys(monthlyData).sort().map(monthKey => {
+            const [year, month] = monthKey.split('-');
+            const monthName = new Date(parseInt(year), parseInt(month)).toLocaleString('default', { month: 'short' });
+            const monthEntry: { month: string, [key: string]: number | string } = { month: monthName };
+            categories.forEach(cat => { monthEntry[cat] = monthlyData[monthKey][cat] || 0; });
+            return monthEntry;
+        });
+
+        return { chartData, categories };
+    }, [transactions]);
 
     const displayedTransactions = useMemo(() => {
         return transactions
@@ -86,12 +149,10 @@ const SpendingPage: React.FC = () => {
             
             if (similarTransactions.length > 0 && originalTransaction.category !== newCategory) {
                 setUpdateModal({ isOpen: true, originalTransaction, newCategory, similarTransactions });
-                // FIX: Prevent "Spread types may only be created from object types" error by providing a default empty object for prev[id].
                 setEditedTransactions(prev => ({ ...prev, [id]: { ...(prev[id] || {}), category: newCategory } }));
                 return; 
             }
         }
-        // FIX: Prevent "Spread types may only be created from object types" error by providing a default empty object for prev[id].
         setEditedTransactions(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: value } }));
     };
 
@@ -130,6 +191,45 @@ const SpendingPage: React.FC = () => {
         } else {
             alert("Category is empty or already exists.");
         }
+    };
+    
+    // Budget Handlers
+    const handleStartEditBudgets = () => {
+        const currentBudgetsAsStrings: Record<TransactionCategory, string> = {};
+        Object.entries(settings.budgets).forEach(([cat, amount]) => {
+            currentBudgetsAsStrings[cat] = convertFromUSD(amount, displayCurrency).toFixed(2);
+        });
+        setEditedBudgets(currentBudgetsAsStrings);
+        setIsEditingBudgets(true);
+    };
+
+    const handleCancelEditBudgets = () => {
+        setEditedBudgets({});
+        setIsEditingBudgets(false);
+    };
+    
+    const handleSaveBudgets = () => {
+        Object.keys(transactionCategories).forEach(key => {
+            const category = transactionCategories[parseInt(key)];
+            const amountStr = editedBudgets[category];
+            const amount = parseFloat(amountStr);
+    
+            if (!isNaN(amount) && amount > 0) {
+                const usdAmount = convertToUSD(amount, displayCurrency);
+                setBudget({ category, amount: usdAmount });
+            } else {
+                if (settings.budgets[category]) {
+                    removeBudget({ category });
+                }
+            }
+        });
+    
+        setIsEditingBudgets(false);
+        setEditedBudgets({});
+    };
+
+    const handleBudgetInputChange = (category: TransactionCategory, value: string) => {
+        setEditedBudgets(prev => ({ ...prev, [category]: value }));
     };
 
   return (
@@ -193,6 +293,87 @@ const SpendingPage: React.FC = () => {
             </div>
           </Card>
       </div>
+      
+      <Card>
+        <h2 className="text-xl font-semibold mb-4">6-Month Spending Trend</h2>
+        <div className="h-80">
+            {monthlySpendingTrendData.chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthlySpendingTrendData.chartData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                        <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value: number) => formatCurrency(value, { notation: 'compact' })} />
+                        <Tooltip
+                            cursor={{ fill: 'rgba(107, 114, 128, 0.1)' }}
+                            contentStyle={{ backgroundColor: '#1e1e1e', border: '1px solid #3a3a3a', borderRadius: '0.5rem' }}
+                            formatter={(value: number, name: string) => [formatCurrency(value), name]}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }} />
+                        {monthlySpendingTrendData.categories.map((category, index) => (
+                            <Bar key={category} dataKey={category} stackId="a" fill={COLORS[index % COLORS.length]} />
+                        ))}
+                    </BarChart>
+                </ResponsiveContainer>
+            ) : ( <div className="flex items-center justify-center h-full text-text-secondary"><p>Not enough data for a 6-month trend.</p></div> )}
+        </div>
+      </Card>
+
+       <Card>
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Monthly Budgets</h2>
+                {isEditingBudgets ? (
+                    <div className="flex gap-2">
+                        <button onClick={handleCancelEditBudgets} className="bg-secondary hover:bg-primary font-semibold py-2 px-4 rounded-lg">Cancel</button>
+                        <button onClick={handleSaveBudgets} className="bg-accent text-white font-semibold py-2 px-4 rounded-lg">Save Budgets</button>
+                    </div>
+                ) : (
+                    <button onClick={handleStartEditBudgets} className="flex items-center gap-2 bg-secondary hover:bg-primary font-semibold py-2 px-4 rounded-lg"><PencilIcon className="w-4 h-4" /> Edit Budgets</button>
+                )}
+            </div>
+            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                {transactionCategories
+                    .filter(cat => cat !== 'Income')
+                    .map(category => {
+                    const spent = spendingThisMonthByCategory[category] || 0;
+                    const budget = settings.budgets[category]; // This is in USD
+                    const percentage = budget && budget > 0 ? (spent / budget) * 100 : 0;
+
+                    return (
+                        <div key={category}>
+                            <div className="flex justify-between items-center mb-1 text-sm">
+                                <span className="font-medium text-text-primary">{category}</span>
+                                {isEditingBudgets ? (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-text-secondary">{displayCurrency}</span>
+                                        <input 
+                                            type="number" 
+                                            placeholder="0"
+                                            value={editedBudgets[category] || ''}
+                                            onChange={(e) => handleBudgetInputChange(category, e.target.value)}
+                                            className="bg-primary border border-secondary rounded-md p-1 w-24 text-right"
+                                            aria-label={`Budget for ${category}`}
+                                        />
+                                    </div>
+                                ) : (
+                                    budget ? (
+                                        <span className="text-text-secondary">
+                                            <span className={percentage > 100 ? 'font-bold text-negative-text' : 'font-semibold text-text-primary'}>
+                                                {formatCurrency(spent)}
+                                            </span>
+                                            {' '}of {formatCurrency(budget)}
+                                        </span>
+                                    ) : (
+                                        <span className="text-text-secondary">{formatCurrency(spent)} spent</span>
+                                    )
+                                )}
+                            </div>
+                            {(!isEditingBudgets && budget) && (
+                                <ProgressBar spent={spent} budget={budget} />
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </Card>
       
       <Card>
         <h2 className="text-xl font-semibold mb-4">Spending Details</h2>

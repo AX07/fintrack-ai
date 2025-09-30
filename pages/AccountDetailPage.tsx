@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useFinance, useCurrency } from '../hooks/useFinance';
@@ -101,7 +102,7 @@ const AccountDetailPage: React.FC = () => {
                                         <td className="p-2"><input type="text" value={holding.name} onChange={e => handleHoldingChange(holding.id, 'name', e.target.value)} className="bg-primary border border-secondary rounded-md p-2 w-full"/></td>
                                         <td className="p-2"><input type="text" value={holding.ticker || ''} onChange={e => handleHoldingChange(holding.id, 'ticker', e.target.value)} className="bg-primary border border-secondary rounded-md p-2 w-24"/></td>
                                         <td className="p-2"><input type="number" step="any" value={holding.quantity} onChange={e => handleHoldingChange(holding.id, 'quantity', e.target.value)} className="bg-primary border border-secondary rounded-md p-2 w-full text-right"/></td>
-                                        <td className="p-2"><input type="number" step="0.01" value={convertFromUSD(holding.price, displayCurrency).toFixed(2)} onChange={e => handleHoldingChange(holding.id, 'price', e.target.value)} className="bg-primary border border-secondary rounded-md p-2 w-full text-right"/></td>
+                                        <td className="p-2"><input type="number" step="0.01" value={(convertFromUSD(holding.price ?? 0, displayCurrency)).toFixed(2)} onChange={e => handleHoldingChange(holding.id, 'price', e.target.value)} className="bg-primary border border-secondary rounded-md p-2 w-full text-right"/></td>
                                         <td className="p-2 text-right font-medium">{formatCurrency(holding.value)}</td>
                                         <td className="p-2 text-center"><button onClick={() => handleRemoveHolding(holding.id)} className="p-2 text-text-secondary hover:text-negative rounded-full hover:bg-negative/10"><TrashIcon className="w-5 h-5"/></button></td>
                                     </tr>
