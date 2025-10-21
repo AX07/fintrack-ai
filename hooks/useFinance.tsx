@@ -19,6 +19,7 @@ type Action =
     | { type: 'ADD_TRANSACTION'; payload: Transaction }
     | { type: 'ADD_MULTIPLE_TRANSACTIONS'; payload: Transaction[] }
     | { type: 'ADD_ACCOUNTS'; payload: Omit<Account, 'id'>[] }
+    | { type: 'ADD_SINGLE_ACCOUNT'; payload: Omit<Account, 'id'> }
     | { type: 'ADD_CONVERSATION'; payload: Conversation }
     | { type: 'ADD_TRANSACTION_CATEGORY'; payload: string }
     | { type: 'RENAME_ACCOUNT'; payload: { oldName: string; newName: string } }
@@ -61,6 +62,7 @@ interface FinanceContextType extends FinanceData {
     addTransaction: (transaction: Omit<Transaction, 'id' | 'amount'> & { originalAmount: { value: number, currency: Currency }}) => void;
     addMultipleTransactions: (transactions: (Omit<Transaction, 'id' | 'amount'> & { originalAmount: { value: number, currency: Currency }})[]) => void;
     addAccounts: (accounts: (Omit<Account, 'id' | 'balance'> & { balance: number, currency: Currency})[]) => void;
+    addSingleAccount: (account: Omit<Account, 'id'>) => void;
     addConversation: (conversation: Conversation) => void;
     addTransactionCategory: (category: string) => void;
     renameAccount: (payload: { oldName: string; newName: string }) => void;
@@ -166,6 +168,18 @@ const financeReducer = (state: FinanceData, action: Action): FinanceData => {
             return {
                 ...state,
                 accounts: updatedAccounts,
+                lastUpdated: new Date().toISOString(),
+            };
+        }
+        case 'ADD_SINGLE_ACCOUNT': {
+            const newAccount = action.payload;
+            const accountWithId: Account = {
+                ...newAccount,
+                id: `acc-${Date.now()}-${Math.random()}`
+            };
+            return {
+                ...state,
+                accounts: [...state.accounts, accountWithId],
                 lastUpdated: new Date().toISOString(),
             };
         }
@@ -459,6 +473,10 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         }));
         dispatch({ type: 'ADD_ACCOUNTS', payload: newAccounts });
     };
+    
+    const addSingleAccount = (account: Omit<Account, 'id'>) => {
+        dispatch({ type: 'ADD_SINGLE_ACCOUNT', payload: account });
+    };
 
     const addConversation = (conversation: Conversation) => dispatch({ type: 'ADD_CONVERSATION', payload: conversation });
     const addTransactionCategory = (category: string) => dispatch({ type: 'ADD_TRANSACTION_CATEGORY', payload: category });
@@ -487,7 +505,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
     
     const currencyValue = { formatCurrency, convertFromUSD, convertToUSD, displayCurrency: state.settings.displayCurrency, exchangeRates };
-    const financeValue: FinanceContextType = { ...state, addTransaction, addMultipleTransactions, addAccounts, addConversation, addTransactionCategory, renameAccount, mergeAccounts, updateTransaction, updateTransactionsCategory, deleteTransaction, updateAccount, deleteAccount, addHolding, updateHolding, updateHoldingPrices, removeHolding, updateSettings, setBudget, removeBudget, setData, setPendingFileForAI, setAiProcessingStatus, clearAllData, formatCurrency };
+    const financeValue: FinanceContextType = { ...state, addTransaction, addMultipleTransactions, addAccounts, addSingleAccount, addConversation, addTransactionCategory, renameAccount, mergeAccounts, updateTransaction, updateTransactionsCategory, deleteTransaction, updateAccount, deleteAccount, addHolding, updateHolding, updateHoldingPrices, removeHolding, updateSettings, setBudget, removeBudget, setData, setPendingFileForAI, setAiProcessingStatus, clearAllData, formatCurrency };
 
     return (
         <FinanceContext.Provider value={financeValue}>

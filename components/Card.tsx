@@ -8,7 +8,7 @@ interface CardProps {
 
 const Card = forwardRef<HTMLDivElement, CardProps>(({ children, className = '' }, ref) => {
   return (
-    <div ref={ref} className={`bg-surface rounded-lg border border-secondary p-6 ${className}`}>
+    <div ref={ref} className={`bg-surface/80 backdrop-blur-sm rounded-lg border border-secondary p-6 ${className}`}>
       {children}
     </div>
   );

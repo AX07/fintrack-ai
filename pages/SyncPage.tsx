@@ -116,7 +116,7 @@ const SyncPage: React.FC = () => {
     }, [peerId, login, navigate, saveGeminiApiKey]);
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-text-primary">
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 text-text-primary">
             <Card className="w-full max-w-md text-center">
                 <div className="flex flex-col justify-center items-center gap-2 mb-4">
                     <a href="https://www.cryptoax07.com/" target="_blank" rel="noopener noreferrer">

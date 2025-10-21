@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { LogoIcon, DashboardIcon, SpendingIcon, AssetsIcon, AIAssistantIcon, LogOutIcon } from './Icons';
@@ -28,7 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         aria-hidden="true"
       ></div>
         
-      <aside className={`fixed top-0 left-0 z-40 w-64 h-full bg-surface border-r border-secondary flex-shrink-0 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed top-0 left-0 z-40 w-64 h-full bg-surface/80 backdrop-blur-sm border-r border-secondary flex-shrink-0 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 flex flex-col h-full">
           {/* Logo and Title */}
           <div className="flex flex-col items-center gap-2 mb-8">

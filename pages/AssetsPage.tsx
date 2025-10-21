@@ -5,9 +5,10 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
 import Card from '../components/Card';
 import { useFinance, useCurrency } from '../hooks/useFinance';
 import { Account, AssetCategory } from '../types';
-import { AssetsIcon, PencilIcon, TrashIcon, RefreshIcon } from '../components/Icons';
+import { AssetsIcon, PencilIcon, TrashIcon, RefreshIcon, GridViewIcon, CardViewIcon } from '../components/Icons';
 import EmptyState from '../components/EmptyState';
 import { fetchAssetPrices } from '../services/marketDataService';
+import AssetsGridView from '../components/AssetsGridView';
 
 const AssetsPage: React.FC = () => {
     const { accounts, updateAccount, deleteAccount, updateHoldingPrices } = useFinance();
@@ -15,6 +16,7 @@ const AssetsPage: React.FC = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [isUpdatingPrices, setIsUpdatingPrices] = useState(false);
     const [editedValues, setEditedValues] = useState<Record<string, {name?: string, balance?: number}>>({});
+    const [view, setView] = useState<'cards' | 'grid'>('cards');
 
     const totalAssetsValue = useMemo(() => accounts.reduce((sum, account) => sum + account.balance, 0), [accounts]);
 
@@ -113,84 +115,107 @@ const AssetsPage: React.FC = () => {
         <p className="text-text-secondary">Your complete financial picture in one place.</p>
       </div>
 
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-            <div>
+      <div className="flex justify-between items-center">
+        { view === 'cards' && (
+            <Card>
                 <h2 className="text-lg font-medium text-text-secondary">Total Net Worth</h2>
-                <p className="text-4xl font-bold text-text-primary mt-2">{formatCurrency(totalAssetsValue)}</p>
-                <p className="text-text-secondary mt-2">Across {accounts.length} accounts.</p>
-            </div>
-            <div className="h-48">
-                {allocationData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie data={allocationData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2} fill="#8884d8">
-                            {allocationData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ backgroundColor: '#1e1e1e', border: '1px solid #3a3a3a', borderRadius: '0.5rem' }}/>
-                        <Legend iconType="circle" layout="vertical" verticalAlign="middle" align="right" />
-                    </PieChart>
-                </ResponsiveContainer>
-                ) : ( <div className="flex items-center justify-center h-full text-text-secondary"><p>No asset data for allocation chart.</p></div> )}
-            </div>
+                <p className="text-2xl font-bold text-text-primary mt-1">{formatCurrency(totalAssetsValue)}</p>
+            </Card>
+        )}
+        <div className="flex space-x-1 rounded-lg bg-primary p-1">
+            <button onClick={() => setView('cards')} className={`flex items-center rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${view === 'cards' ? 'bg-accent text-white' : 'text-text-secondary hover:bg-secondary'}`} aria-pressed={view === 'cards'}>
+                <CardViewIcon className="w-5 h-5" />
+                <span className="hidden sm:inline ml-2">Card View</span>
+            </button>
+            <button onClick={() => setView('grid')} className={`flex items-center rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${view === 'grid' ? 'bg-accent text-white' : 'text-text-secondary hover:bg-secondary'}`} aria-pressed={view === 'grid'}>
+                <GridViewIcon className="w-5 h-5" />
+                <span className="hidden sm:inline ml-2">Grid View</span>
+            </button>
         </div>
-      </Card>
-
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-2 gap-4">
-            <h2 className="text-2xl font-semibold w-full sm:w-auto self-start sm:self-center">Your Accounts</h2>
-             <div className="flex w-full sm:w-auto gap-3">
-                <button onClick={handleUpdatePrices} disabled={isUpdatingPrices} className="flex w-full sm:w-auto justify-center items-center gap-2 bg-secondary hover:bg-primary font-semibold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-wait">
-                    <RefreshIcon className={`w-4 h-4 ${isUpdatingPrices ? 'animate-spin' : ''}`} />{isUpdatingPrices ? 'Updating...' : 'Update Prices'}
-                </button>
-                <button onClick={handleEditToggle} className="flex w-full sm:w-auto justify-center items-center gap-2 bg-secondary hover:bg-primary font-semibold py-2 px-4 rounded-lg">
-                    {isEditing ? 'Done' : <><PencilIcon className="w-4 h-4" /> Edit Accounts</>}
-                </button>
-            </div>
-        </div>
-
-        {Object.keys(accountsByCategory).length > 0 ? Object.entries(accountsByCategory).map(([category, accts]) => {
-            // FIX: Add type assertion for `accts` because TS fails to infer it from Object.entries, causing a 'reduce is not a function' error.
-            const categoryTotal = (accts as Account[]).reduce((sum, acc) => sum + acc.balance, 0);
-            return (
-                <div key={category} className="space-y-4">
-                    <div className="flex justify-between items-baseline px-2">
-                        <h3 className="text-xl font-semibold">{category}</h3>
-                        <span className="font-semibold text-lg text-text-secondary">{formatCurrency(categoryTotal)}</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* FIX: Add type assertion for `accts` to fix 'map is not a function' error. */}
-                        {(accts as Account[]).map(account => (
-                            <Card key={account.id} className="relative flex flex-col justify-between">
-                                {isEditing ? (
-                                    <div>
-                                        <button onClick={() => handleDeleteAccount(account.id, account.name)} className="absolute top-3 right-3 p-2 text-text-secondary hover:text-negative rounded-full hover:bg-negative/10" aria-label={`Delete ${account.name}`}><TrashIcon className="w-5 h-5" /></button>
-                                        <div className="space-y-2 pr-8">
-                                            <label className="text-xs text-text-secondary">Account Name</label>
-                                            <input type="text" value={editedValues[account.id]?.name ?? account.name} onChange={(e) => handleValueChange(account.id, 'name', e.target.value)} className="bg-primary border border-secondary rounded-md px-3 py-2 w-full"/>
-                                            {(account.holdings && account.holdings.length > 0) ? (
-                                                 <div><label className="text-xs text-text-secondary">Balance (from holdings)</label><p className="font-semibold text-2xl mt-1">{formatCurrency(account.balance)}</p></div>
-                                            ) : (
-                                                <div>
-                                                    <label className="text-xs text-text-secondary">Balance</label>
-                                                    <input type="number" value={editedValues[account.id]?.balance ?? account.balance} onChange={(e) => handleValueChange(account.id, 'balance', parseFloat(e.target.value) || 0)} className="bg-primary border border-secondary rounded-md px-3 py-2 w-full"/>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <Link to={`/assets/${account.id}`} className="block hover:bg-primary/30 rounded-lg p-2 -m-2">
-                                        <div><p className="font-semibold text-lg">{account.name}</p><p className="text-sm text-text-secondary">{account.institution}</p></div>
-                                        <p className="font-semibold text-2xl mt-2">{formatCurrency(account.balance)}</p>
-                                    </Link>
-                                )}
-                            </Card>
-                        ))}
-                    </div>
-                </div>
-            );
-        }) : ( <Card><p className="text-center text-text-secondary py-8">No accounts found.</p></Card> )}
       </div>
+      
+      {view === 'cards' ? (
+        <>
+        <Card>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                <div>
+                    <h2 className="text-lg font-medium text-text-secondary">Total Net Worth</h2>
+                    <p className="text-4xl font-bold text-text-primary mt-2">{formatCurrency(totalAssetsValue)}</p>
+                    <p className="text-text-secondary mt-2">Across {accounts.length} accounts.</p>
+                </div>
+                <div className="h-48">
+                    {allocationData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie data={allocationData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2} fill="#8884d8">
+                                {allocationData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ backgroundColor: '#1e1e1e', border: '1px solid #3a3a3a', borderRadius: '0.5rem' }}/>
+                            <Legend iconType="circle" layout="vertical" verticalAlign="middle" align="right" />
+                        </PieChart>
+                    </ResponsiveContainer>
+                    ) : ( <div className="flex items-center justify-center h-full text-text-secondary"><p>No asset data for allocation chart.</p></div> )}
+                </div>
+            </div>
+        </Card>
+
+        <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-2 gap-4">
+                <h2 className="text-2xl font-semibold w-full sm:w-auto self-start sm:self-center">Your Accounts</h2>
+                <div className="flex w-full sm:w-auto gap-3">
+                    <button onClick={handleUpdatePrices} disabled={isUpdatingPrices} className="flex w-full sm:w-auto justify-center items-center gap-2 bg-secondary hover:bg-primary font-semibold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-wait">
+                        <RefreshIcon className={`w-4 h-4 ${isUpdatingPrices ? 'animate-spin' : ''}`} />{isUpdatingPrices ? 'Updating...' : 'Update Prices'}
+                    </button>
+                    <button onClick={handleEditToggle} className="flex w-full sm:w-auto justify-center items-center gap-2 bg-secondary hover:bg-primary font-semibold py-2 px-4 rounded-lg">
+                        {isEditing ? 'Done' : <><PencilIcon className="w-4 h-4" /> Edit Accounts</>}
+                    </button>
+                </div>
+            </div>
+
+            {Object.keys(accountsByCategory).length > 0 ? Object.entries(accountsByCategory).map(([category, accts]) => {
+                const categoryTotal = (accts as Account[]).reduce((sum, acc) => sum + acc.balance, 0);
+                return (
+                    <div key={category} className="space-y-4">
+                        <div className="flex justify-between items-baseline px-2">
+                            <h3 className="text-xl font-semibold">{category}</h3>
+                            <span className="font-semibold text-lg text-text-secondary">{formatCurrency(categoryTotal)}</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {(accts as Account[]).map(account => (
+                                <Card key={account.id} className="relative flex flex-col justify-between">
+                                    {isEditing ? (
+                                        <div>
+                                            <button onClick={() => handleDeleteAccount(account.id, account.name)} className="absolute top-3 right-3 p-2 text-text-secondary hover:text-negative rounded-full hover:bg-negative/10" aria-label={`Delete ${account.name}`}><TrashIcon className="w-5 h-5" /></button>
+                                            <div className="space-y-2 pr-8">
+                                                <label className="text-xs text-text-secondary">Account Name</label>
+                                                <input type="text" value={editedValues[account.id]?.name ?? account.name} onChange={(e) => handleValueChange(account.id, 'name', e.target.value)} className="bg-primary border border-secondary rounded-md px-3 py-2 w-full"/>
+                                                {(account.holdings && account.holdings.length > 0) ? (
+                                                    <div><label className="text-xs text-text-secondary">Balance (from holdings)</label><p className="font-semibold text-2xl mt-1">{formatCurrency(account.balance)}</p></div>
+                                                ) : (
+                                                    <div>
+                                                        <label className="text-xs text-text-secondary">Balance</label>
+                                                        <input type="number" value={editedValues[account.id]?.balance ?? account.balance} onChange={(e) => handleValueChange(account.id, 'balance', parseFloat(e.target.value) || 0)} className="bg-primary border border-secondary rounded-md px-3 py-2 w-full"/>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <Link to={`/assets/${account.id}`} className="block hover:bg-primary/30 rounded-lg p-2 -m-2">
+                                            <div><p className="font-semibold text-lg">{account.name}</p><p className="text-sm text-text-secondary">{account.institution}</p></div>
+                                            <p className="font-semibold text-2xl mt-2">{formatCurrency(account.balance)}</p>
+                                        </Link>
+                                    )}
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }) : ( <Card><p className="text-center text-text-secondary py-8">No accounts found.</p></Card> )}
+        </div>
+        </>
+      ) : (
+        <AssetsGridView />
+      )}
     </div>
   );
 };
